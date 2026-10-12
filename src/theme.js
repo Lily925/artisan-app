@@ -27,6 +27,7 @@ export const THEME_CSS = `
 
   .a-chip{border:1.5px solid ${COLORS.border};border-radius:2px;padding:10px 18px;font-family:${FONT_SANS};font-size:13px;font-weight:600;cursor:pointer;background:${COLORS.card};color:${COLORS.ink};transition:all 0.15s;min-height:44px;white-space:nowrap;flex-shrink:0;}
   .a-chip:hover{border-color:${COLORS.accentDark};color:${COLORS.accentDark};}
+  .a-chip.selected{background:${COLORS.accent};border-color:${COLORS.accentDark};color:${COLORS.ink};}
 
   .a-nav-link{font-family:${FONT_SANS};font-size:12px;font-weight:700;color:${COLORS.inkSoft};background:none;border:none;cursor:pointer;padding:8px 6px;min-height:44px;transition:color 0.15s;}
   .a-nav-link:hover,.a-nav-link.active{color:${COLORS.ink};}

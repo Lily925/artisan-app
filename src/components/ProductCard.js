@@ -39,7 +39,7 @@ export default function ProductCard({
           <span aria-hidden="true">{isSaved ? "❤️" : "🤍"}</span>
           {likeCount > 0 && <span aria-hidden="true" className="a-like-count">{likeCount}</span>}
         </button>
-        <span className="a-badge-certified">✓ {certifiedLabel}</span>
+        {product.artisan?.certified && <span className="a-badge-certified">✓ {certifiedLabel}</span>}
       </div>
 
       <a href="#" className="a-card-link" onClick={openCard} style={{ padding:"14px 14px 16px", display:"flex", flexDirection:"column", gap:4, flex:1 }}>

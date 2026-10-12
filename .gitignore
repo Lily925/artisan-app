@@ -1,4 +1,3 @@
-```ignore
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
@@ -7,9 +6,15 @@
 .pnp.js
 server/node_modules
 
-# env
+# env (keep the placeholder example)
 .env
+.env.*
 server/.env
+server/.env.*
+!server/.env.example
+
+# uploaded product photos (local disk storage; see HANDOFF caveat 2)
+server/uploads/
 
 # testing
 /coverage

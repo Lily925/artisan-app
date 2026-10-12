@@ -7,9 +7,13 @@ const Artisan = require("../models/Artisan");
 const Product = require("../models/Product");
 const { users, artisanProfiles, products } = require("./seedData");
 const { pricingTiersFor } = require("../utils/pricing");
+const { addDemoData, removeDemoData } = require("./demo");
 
 async function run() {
   await connectDB();
+
+  // Demo orders/views point at the users and products about to be wiped; clear them first.
+  await removeDemoData();
 
   console.log("Clearing existing Users, Artisans, and Products...");
   await Promise.all([User.deleteMany({}), Artisan.deleteMany({}), Product.deleteMany({})]);
@@ -43,6 +47,9 @@ async function run() {
       images: p.images || [],
     });
   }
+
+  // DEMO DATA (fake orders/views for the dashboard), see demoData.js.
+  await addDemoData();
 
   console.log(`Seeded ${users.length} users, ${Object.keys(artisanProfiles).length} artisans, ${products.length} products.`);
   await mongoose.disconnect();

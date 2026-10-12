@@ -1,6 +1,7 @@
 import { COLORS, FONT_SERIF, FONT_SANS } from "../theme";
 import { placeholderEmoji } from "../placeholders";
 import { artisanInfo } from "../artisanInfo";
+import { bonusText } from "../tiers";
 
 const TIER_DISPLAY = { basic: "Basic", story: "Story", patron: "Patron" };
 
@@ -10,10 +11,9 @@ export default function Cart({ lang, t, cart, onUpdateQty, onRemove, onCheckout,
   const isEmpty = items.length === 0;
 
   const lineTotal = (item) => item.product.pricingTiers[item.tier].price * item.qty;
-  const subtotalUSD = items.reduce((s, i) => s + lineTotal(i), 0);
-  const feeUSD = subtotalUSD * 0.15;
-  const shippingUSD = isEmpty ? 0 : 12;
-  const totalUSD = subtotalUSD + feeUSD + shippingUSD;
+  // Computed on the server by the same function checkout uses, so the preview matches the charge.
+  const { subtotal: subtotalUSD, commissionFee: feeUSD, shipping: shippingUSD, total: totalUSD } =
+    cart?.totals || { subtotal: 0, commissionFee: 0, shipping: 0, total: 0 };
 
   return (
     <div style={{ background:COLORS.bg, minHeight:"100vh" }}>
@@ -47,6 +47,11 @@ export default function Cart({ lang, t, cart, onUpdateQty, onRemove, onCheckout,
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ fontFamily:FONT_SERIF, fontSize:17, fontWeight:600, color:COLORS.ink, marginBottom:4 }}>{name}</div>
                       <div style={{ fontFamily:FONT_SANS, fontSize:12, color:COLORS.inkSoft }}>{c.by(artisanName)} · {TIER_DISPLAY[item.tier]}</div>
+                      {item.tier !== "basic" && (
+                        <div style={{ fontFamily:FONT_SANS, fontSize:12, color:COLORS.inkSoft, marginTop:2, overflowWrap:"anywhere" }}>
+                          {item.tier === "patron" ? t.tierText.patron(bonusText(p.patronBonus, lang)) : t.tierText.story}
+                        </div>
+                      )}
                     </div>
                     <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                       <button type="button" className="a-qty-btn" aria-label={`Decrease quantity of ${name}`} onClick={() => onUpdateQty(p._id, item.tier, Math.max(1, item.qty - 1))}>−</button>

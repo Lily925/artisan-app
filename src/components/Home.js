@@ -1,7 +1,7 @@
 import { COLORS, FONT_SERIF, FONT_SANS } from "../theme";
 import ProductCard from "./ProductCard";
 
-export default function Home({ lang, t, prods, savedItems, toggleSave, openProduct, fmt, navigate }) {
+export default function Home({ lang, t, prods, savedItems, toggleSave, openProduct, fmt, navigate, openShop }) {
   const home = t.homePage;
 
   return (
@@ -14,15 +14,15 @@ export default function Home({ lang, t, prods, savedItems, toggleSave, openProdu
           {home.heroSub}
         </p>
         <div style={{ display:"flex", gap:12, justifyContent:"center", flexWrap:"wrap" }}>
-          <button type="button" className="a-btn-primary" onClick={() => navigate("shop")}>{home.ctaBrowse}</button>
+          <button type="button" className="a-btn-primary" onClick={() => openShop()}>{home.ctaBrowse}</button>
           <button type="button" className="a-btn-outline" onClick={() => navigate("commission")}>{home.ctaCommission}</button>
         </div>
       </section>
 
       <nav aria-label={home.categoriesAria} style={{ display:"flex", gap:10, overflowX:"auto", padding:"24px 24px 8px" }}>
-        {home.categories.map((label) => (
-          <button key={label} type="button" className="a-chip" onClick={() => navigate("shop")}>
-            {label}
+        {t.productCategories.map((c) => (
+          <button key={c.key} type="button" className="a-chip" onClick={() => openShop(c.key)}>
+            {c.label}
           </button>
         ))}
       </nav>

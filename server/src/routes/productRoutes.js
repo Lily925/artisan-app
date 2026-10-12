@@ -1,10 +1,10 @@
 const express = require("express");
 const asyncHandler = require("../middleware/asyncHandler");
-const { requireAuth, requireRole } = require("../middleware/auth");
+const { requireAuth, optionalAuth, requireRole } = require("../middleware/auth");
 const { productPhotoUpload } = require("../utils/imageStorage");
 const {
   listProducts, getProduct, createProduct, updateProduct, deleteProduct,
-  likeProduct, unlikeProduct, listMyLikes,
+  likeProduct, unlikeProduct, listMyLikes, recordView,
 } = require("../controllers/productController");
 
 const router = express.Router();
@@ -19,5 +19,7 @@ router.put("/:id", requireAuth, requireRole("artisan"), productPhotoUpload, asyn
 router.delete("/:id", requireAuth, requireRole("artisan"), asyncHandler(deleteProduct));
 router.put("/:id/like", requireAuth, asyncHandler(likeProduct));
 router.delete("/:id/like", requireAuth, asyncHandler(unlikeProduct));
+// Product page opened; login optional (logged-out visitors send X-Viewer-Session).
+router.post("/:id/view", optionalAuth, asyncHandler(recordView));
 
 module.exports = router;

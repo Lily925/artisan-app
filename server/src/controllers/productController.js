@@ -4,12 +4,18 @@ const Artisan = require("../models/Artisan");
 const Cart = require("../models/Cart");
 const { pricingTiersFor } = require("../utils/pricing");
 const { saveProductPhoto, deleteProductPhoto } = require("../utils/imageStorage");
+const { recordProductView } = require("../utils/productViews");
+const { ProductViewMark } = require("../models/ProductView");
 
 const ARTISAN_POPULATE = { path: "artisan", populate: { path: "user", select: "name" } };
 
 async function listProducts(req, res) {
+  const { category } = req.query;
+  if (category !== undefined && typeof category !== "string") {
+    return res.status(400).json({ error: "category must be a string" });
+  }
   const filter = {};
-  if (req.query.category) filter.category = req.query.category;
+  if (category) filter.category = category;
 
   const products = await Product.find(filter).populate(ARTISAN_POPULATE).sort({ createdAt: -1 });
   res.json(products);
@@ -24,6 +30,7 @@ async function getProduct(req, res) {
 // Keys match the frontend's productCategories list.
 const CATEGORIES = ["jewelry", "ceramics", "art", "textile", "crafts", "leather", "wood"];
 const MAX_PRICE_USD = 10000;
+const MAX_BONUS_CHARS = 100;
 const text = (v) => (typeof v === "string" ? v.trim() : "");
 
 // Reads + validates the multipart product fields shared by create and update.
@@ -34,12 +41,17 @@ function readProductFields(body) {
     description: text(body.description),
     category: text(body.category),
     basicPrice: Math.round(Number(body.price) * 100) / 100,
+    // Optional; leaving both empty means no Patron tier for this product.
+    patronBonus: { mn: text(body.patronBonusMn), en: text(body.patronBonusEn) },
   };
   const problems = [];
   if (!fields.title || fields.title.length > 120) problems.push("Mongolian name is required (max 120 characters)");
   if (!fields.titleEn || fields.titleEn.length > 120) problems.push("English name is required (max 120 characters)");
   if (!CATEGORIES.includes(fields.category)) problems.push("Choose a valid category");
   if (fields.description.length > 2000) problems.push("Description must be 2000 characters or fewer");
+  if (fields.patronBonus.mn.length > MAX_BONUS_CHARS || fields.patronBonus.en.length > MAX_BONUS_CHARS) {
+    problems.push(`Patron bonus must be ${MAX_BONUS_CHARS} characters or fewer`);
+  }
   if (!(fields.basicPrice > 0 && fields.basicPrice <= MAX_PRICE_USD)) problems.push(`Price must be between $0.01 and $${MAX_PRICE_USD}`);
   return { fields, problems };
 }
@@ -60,7 +72,8 @@ async function findOwnProduct(req, res) {
 }
 
 // Artisan self-service: multipart form with fields title, titleEn, category,
-// description, price (Basic, USD) and one required "photo" file.
+// description, price (Basic, USD), optional patronBonusMn / patronBonusEn and one
+// required "photo" file.
 async function createProduct(req, res) {
   const artisan = await Artisan.findOne({ user: req.user.id });
   if (!artisan) {
@@ -127,6 +140,8 @@ async function deleteProduct(req, res) {
 
   await Product.deleteOne({ _id: product._id });
   await Cart.updateMany({ "items.product": product._id }, { $pull: { items: { product: product._id } } });
+  // Daily view totals stay so the shop's 30-day views chart doesn't change retroactively.
+  await ProductViewMark.deleteMany({ product: product._id });
   await Promise.all(product.images.map(deleteProductPhoto));
   res.json({ deleted: true, id: product._id });
 }
@@ -172,7 +187,33 @@ async function listMyLikes(req, res) {
   res.json(liked.map((p) => p._id));
 }
 
+// Browser session id sent by logged-out visitors (src/api.js makes one per tab session).
+const SESSION_ID = /^[A-Za-z0-9-]{16,64}$/;
+
+// Called when a product page is opened. Repeat views by the same logged-in user (or the
+// same browser session when logged out) within 24h aren't counted, nor are the owning
+// artisan's own views. Nothing about the viewer is ever shown to the artisan.
+async function recordView(req, res) {
+  if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ error: "Product not found" });
+  const product = await Product.findById(req.params.id).select("artisan");
+  if (!product) return res.status(404).json({ error: "Product not found" });
+
+  let viewerKey = null;
+  if (req.user) {
+    const own = await Artisan.exists({ _id: product.artisan, user: req.user.id });
+    if (own) return res.json({ counted: false });
+    viewerKey = `u:${req.user.id}`;
+  } else {
+    const session = req.get("X-Viewer-Session");
+    if (typeof session === "string" && SESSION_ID.test(session)) viewerKey = `s:${session}`;
+  }
+  // Without a user or session there's no way to spot repeats, so don't count it.
+  if (!viewerKey) return res.json({ counted: false });
+
+  res.json({ counted: await recordProductView(product, viewerKey) });
+}
+
 module.exports = {
   listProducts, getProduct, createProduct, updateProduct, deleteProduct,
-  likeProduct, unlikeProduct, listMyLikes,
+  likeProduct, unlikeProduct, listMyLikes, recordView,
 };

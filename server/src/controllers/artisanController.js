@@ -1,4 +1,5 @@
 const Artisan = require("../models/Artisan");
+const Product = require("../models/Product");
 
 // Fields an artisan may change on their own profile, with the JSON type each
 // accepts. Everything else (shopName, specialty, certified, photoUrl, user) stays
@@ -12,8 +13,15 @@ const SELF_EDITABLE_FIELDS = {
 };
 
 // Public endpoints expose the artisan's name only — never email (contact is Instagram-only).
+// ?category=<key> returns only artisans who sell at least one product in that category
+// (used to match artisans to a commission request).
 async function listArtisans(req, res) {
-  const artisans = await Artisan.find().populate("user", "name");
+  const { category } = req.query;
+  if (category !== undefined && typeof category !== "string") {
+    return res.status(400).json({ error: "category must be a string" });
+  }
+  const filter = category ? { _id: { $in: await Product.distinct("artisan", { category }) } } : {};
+  const artisans = await Artisan.find(filter).populate("user", "name");
   res.json(artisans);
 }
 

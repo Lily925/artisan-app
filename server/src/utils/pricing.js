@@ -14,4 +14,7 @@ function pricingTiersFor(basicPrice) {
   };
 }
 
-module.exports = { pricingTiersFor, STORY_MARKUP, PATRON_MARKUP };
+// The Patron tier is only offered when the artisan has written what the bonus is.
+const offersPatron = (product) => Boolean(product.patronBonus?.mn || product.patronBonus?.en);
+
+module.exports = { pricingTiersFor, offersPatron, STORY_MARKUP, PATRON_MARKUP };

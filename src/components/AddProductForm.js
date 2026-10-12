@@ -9,8 +9,11 @@ const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 // e.g. 79,002 instead of 79,000). The artisan can switch to ₮ and type a new price.
 const initialForm = (product) => product
   ? { title: product.title || "", titleEn: product.titleEn || "", category: product.category || "",
-      description: product.description || "", price: String(product.pricingTiers.basic.price), currency: "USD" }
-  : { title: "", titleEn: "", category: "", description: "", price: "", currency: "MNT" };
+      description: product.description || "", price: String(product.pricingTiers.basic.price), currency: "USD",
+      patronBonusMn: product.patronBonus?.mn || "", patronBonusEn: product.patronBonus?.en || "" }
+  : { title: "", titleEn: "", category: "", description: "", price: "", currency: "MNT", patronBonusMn: "", patronBonusEn: "" };
+
+const MAX_BONUS_CHARS = 100;
 
 // Artisan self-service product form: adds a product, or edits one when `product`
 // is given (photo optional then). Prices can be typed in ₮ and are converted to USD
@@ -62,6 +65,9 @@ export default function AddProductForm({ t, product, rateMnt, onBack, onSaved, o
     data.append("category", form.category);
     data.append("description", form.description.trim());
     data.append("price", String(usd));
+    // Always sent, so clearing both fields on edit removes the Patron tier.
+    data.append("patronBonusMn", form.patronBonusMn.trim());
+    data.append("patronBonusEn", form.patronBonusEn.trim());
 
     setError("");
     setSaving(true);
@@ -159,6 +165,23 @@ export default function AddProductForm({ t, product, rateMnt, onBack, onSaved, o
             {usd && form.currency === "MNT" && <div>{a.usdPreview(usd.toFixed(2), Math.round(rateMnt).toLocaleString())}</div>}
             <div>{a.tiersNote}</div>
           </div>
+
+          <fieldset style={{ border:"none", padding:0, margin:"0 0 24px" }} aria-describedby="ap-bonus-hint">
+            <legend className="a-label">{a.patronBonusTitle}</legend>
+            <div id="ap-bonus-hint" style={{ ...hint, marginTop:0, marginBottom:10 }}>{a.patronBonusHint}</div>
+            <div style={{ display:"flex", flexWrap:"wrap", gap:"0 16px" }}>
+              <div style={{ flex:"1 1 240px", marginBottom:8 }}>
+                <label className="a-label" htmlFor="ap-bonus-mn" style={{ fontWeight:600 }}>{a.patronBonusMn}</label>
+                <input id="ap-bonus-mn" className="a-input" type="text" maxLength={MAX_BONUS_CHARS} value={form.patronBonusMn} onChange={update("patronBonusMn")} />
+                <div style={{ ...hint, textAlign:"right", marginTop:4 }}>{form.patronBonusMn.length}/{MAX_BONUS_CHARS}</div>
+              </div>
+              <div style={{ flex:"1 1 240px", marginBottom:8 }}>
+                <label className="a-label" htmlFor="ap-bonus-en" style={{ fontWeight:600 }}>{a.patronBonusEn}</label>
+                <input id="ap-bonus-en" className="a-input" type="text" maxLength={MAX_BONUS_CHARS} value={form.patronBonusEn} onChange={update("patronBonusEn")} />
+                <div style={{ ...hint, textAlign:"right", marginTop:4 }}>{form.patronBonusEn.length}/{MAX_BONUS_CHARS}</div>
+              </div>
+            </div>
+          </fieldset>
 
           {error && (
             <div role="alert" style={{ fontFamily:FONT_SANS, fontSize:12, color:"#B3261E", marginBottom:14 }}>{error}</div>

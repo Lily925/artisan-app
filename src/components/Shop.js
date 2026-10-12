@@ -1,12 +1,12 @@
 import { COLORS, FONT_SERIF, FONT_SANS } from "../theme";
+import { placeholderEmoji } from "../placeholders";
 import ProductCard from "./ProductCard";
 import Footer from "./Footer";
 
-const CATEGORY_ICONS = ["🧶", "👜", "💍", "🐐", "🏺"];
-
-export default function Shop({ lang, t, filtered, savedItems, toggleSave, openProduct, fmt, navigate }) {
+export default function Shop({ lang, t, filtered, loading, category, openShop, savedItems, toggleSave, openProduct, fmt, navigate }) {
   const shop = t.shopPage;
   const home = t.homePage;
+  const chips = [{ key: "", label: shop.allCategories }, ...t.productCategories];
 
   return (
     <div style={{ background:COLORS.bg, minHeight:"100vh" }}>
@@ -17,11 +17,25 @@ export default function Shop({ lang, t, filtered, savedItems, toggleSave, openPr
               {shop.eyebrow}
             </div>
             <h1 style={{ fontFamily:FONT_SERIF, fontSize:32, fontWeight:600, color:COLORS.ink }}>
-              {t.results(filtered.length)}
+              {loading ? "…" : t.results(filtered.length)}
             </h1>
           </div>
           <span style={{ fontFamily:FONT_SANS, fontSize:13, color:COLORS.inkSoft }}>{t.sort}</span>
         </div>
+
+        <nav aria-label={home.categoriesAria} style={{ display:"flex", gap:10, overflowX:"auto", marginBottom:24 }}>
+          {chips.map((c) => (
+            <button
+              key={c.key || "all"}
+              type="button"
+              className={`a-chip${category === c.key ? " selected" : ""}`}
+              aria-pressed={category === c.key}
+              onClick={() => openShop(c.key)}
+            >
+              {c.label}
+            </button>
+          ))}
+        </nav>
 
         <div className="a-product-grid" style={{ marginBottom:64 }}>
           {filtered.map((p) => {
@@ -53,7 +67,7 @@ export default function Shop({ lang, t, filtered, savedItems, toggleSave, openPr
               {shop.bannerSub}
             </p>
             <div style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
-              <button type="button" className="a-btn-primary" onClick={() => navigate("shop")}>{shop.bannerCtaBrowse}</button>
+              <button type="button" className="a-btn-primary" onClick={() => { openShop(); window.scrollTo(0, 0); }}>{shop.bannerCtaBrowse}</button>
               <button type="button" className="a-btn-outline" onClick={() => navigate("commission")}>{shop.bannerCtaCommission}</button>
             </div>
           </div>
@@ -65,15 +79,15 @@ export default function Shop({ lang, t, filtered, savedItems, toggleSave, openPr
         </section>
 
         <nav aria-label={home.categoriesAria} style={{ display:"flex", justifyContent:"center", gap:40, flexWrap:"wrap", marginBottom:16 }}>
-          {shop.categories.map((label, i) => (
+          {t.productCategories.map((c) => (
             <button
-              key={label}
+              key={c.key}
               type="button"
-              onClick={() => navigate("shop")}
+              onClick={() => { openShop(c.key); window.scrollTo(0, 0); }}
               style={{ background:"none", border:"none", cursor:"pointer", fontFamily:FONT_SANS, fontSize:12, fontWeight:600, color:COLORS.ink, textAlign:"center", minHeight:44 }}
             >
-              <span className="a-category-icon" aria-hidden="true">{CATEGORY_ICONS[i]}</span>
-              {label}
+              <span className="a-category-icon" aria-hidden="true">{placeholderEmoji(c.key)}</span>
+              {c.label}
             </button>
           ))}
         </nav>

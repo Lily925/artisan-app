@@ -1,7 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { COLORS, FONT_SERIF, FONT_SANS } from "../theme";
+import { api } from "../api";
+import { artisanInfo } from "../artisanInfo";
+import ArtisanAvatar from "./ArtisanAvatar";
 
-export default function ReverseAuction({ t, navigate, onSubmit }) {
+export default function ReverseAuction({ t, navigate, onSubmit, isArtisan }) {
   const a = t.auctionPage;
   const [step, setStep] = useState(0);
   const [category, setCategory] = useState(t.productCategories[0].key);
@@ -12,6 +15,17 @@ export default function ReverseAuction({ t, navigate, onSubmit }) {
   const [dragOver, setDragOver] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  // Artisans who sell in the chosen category (null = loading).
+  const [matched, setMatched] = useState(null);
+
+  useEffect(() => {
+    let stale = false;
+    setMatched(null);
+    api.getArtisans(category)
+      .then((list) => { if (!stale) setMatched(list); })
+      .catch(() => { if (!stale) setMatched([]); });
+    return () => { stale = true; };
+  }, [category]);
 
   const handleFile = (file) => { if (file) setFileName(file.name); };
 
@@ -37,7 +51,10 @@ export default function ReverseAuction({ t, navigate, onSubmit }) {
           <div style={{ fontSize:56, marginBottom:20 }}>✅</div>
           <h1 style={{ fontFamily:FONT_SERIF, fontSize:26, fontWeight:600, color:COLORS.ink, marginBottom:10 }}>{t.submitted}</h1>
           <p style={{ fontFamily:FONT_SANS, fontSize:14, color:COLORS.inkSoft, marginBottom:28 }}>{t.submittedSub}</p>
-          <button type="button" className="a-btn-primary" onClick={() => { navigate("home"); setStep(0); }}>{t.backHome}</button>
+          <div style={{ display:"flex", gap:12, justifyContent:"center", flexWrap:"wrap" }}>
+            <button type="button" className="a-btn-primary" onClick={() => navigate("my-commissions")}>{t.commissions.viewMine}</button>
+            <button type="button" className="a-btn-outline" onClick={() => navigate("home")}>{t.backHome}</button>
+          </div>
         </div>
       </div>
     );
@@ -46,7 +63,17 @@ export default function ReverseAuction({ t, navigate, onSubmit }) {
   return (
     <div style={{ background:COLORS.bg, minHeight:"100vh" }}>
       <div className="a-page">
-        <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:8 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, flexWrap:"wrap", marginBottom:8 }}>
+          <div style={{ display:"flex", gap:16, flexWrap:"wrap" }}>
+            <button type="button" className="a-shop-link" style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:700 }} onClick={() => navigate("my-commissions")}>
+              {t.commissions.mineOpen} →
+            </button>
+            {isArtisan && (
+              <button type="button" className="a-shop-link" style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:700 }} onClick={() => navigate("commission-board")}>
+                {t.commissions.boardOpen} →
+              </button>
+            )}
+          </div>
           <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:700, letterSpacing:0.5, color:COLORS.accentDark }}>{a.kicker}</span>
         </div>
 
@@ -133,19 +160,26 @@ export default function ReverseAuction({ t, navigate, onSubmit }) {
 
             <div className="a-info-block">
               <div className="a-label" style={{ marginBottom:14 }}>{a.matchedTitle}</div>
-              <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-                {a.matchedArtisans.map((art) => (
-                  <div key={art.name} style={{ display:"flex", alignItems:"center", gap:10 }}>
-                    <div style={{ width:36, height:36, borderRadius:"50%", background:COLORS.accentSoft, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:700, color:COLORS.ink, flexShrink:0 }}>
-                      {art.name[0]}
+              <div aria-live="polite" style={{ display:"flex", flexDirection:"column", gap:14 }}>
+                {matched === null ? (
+                  <div style={{ fontFamily:FONT_SANS, fontSize:13, color:COLORS.inkSoft }}>…</div>
+                ) : matched.length === 0 ? (
+                  <div style={{ fontFamily:FONT_SANS, fontSize:13, color:COLORS.inkSoft, lineHeight:1.5 }}>{a.matchedEmpty}</div>
+                ) : matched.map((art) => {
+                  const { displayName, photoUrl } = artisanInfo(art);
+                  return (
+                    <div key={art._id} style={{ display:"flex", alignItems:"center", gap:10 }}>
+                      <ArtisanAvatar name={displayName} photoUrl={photoUrl} size={36} />
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:700, color:COLORS.ink, overflowWrap:"anywhere" }}>{displayName}</div>
+                        {art.specialty && <div style={{ fontFamily:FONT_SANS, fontSize:12, color:COLORS.inkSoft }}>{art.specialty}</div>}
+                      </div>
+                      {art.certified && (
+                        <span title={t.homePage.certified} aria-label={t.homePage.certified} style={{ color:COLORS.accentDark, fontWeight:700 }}>✓</span>
+                      )}
                     </div>
-                    <div style={{ flex:1 }}>
-                      <div style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:700, color:COLORS.ink }}>{art.name}</div>
-                      <div style={{ fontFamily:FONT_SANS, fontSize:12, color:COLORS.inkSoft }}>{art.specialty}</div>
-                    </div>
-                    <span aria-hidden="true" style={{ color:COLORS.accentDark, fontWeight:700 }}>✓</span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>

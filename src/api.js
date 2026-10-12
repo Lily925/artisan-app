@@ -9,9 +9,10 @@ export function assetUrl(path) {
 }
 
 export class ApiError extends Error {
-  constructor(message, status) {
+  constructor(message, status, code) {
     super(message);
     this.status = status;
+    this.code = code; // machine-readable reason sent by some endpoints, e.g. "OTHER_SHOP"
   }
 }
 
@@ -23,9 +24,25 @@ export function setToken(token) {
   else localStorage.removeItem(TOKEN_KEY);
 }
 
-async function request(path, { method = "GET", body, formData, auth = false } = {}) {
+// Random id for this browser tab session, so logged-out product views aren't counted
+// twice within 24h. Kept in sessionStorage; never tied to an account.
+const SESSION_KEY = "artisan-viewer-session";
+function viewerSession() {
+  try {
+    let id = sessionStorage.getItem(SESSION_KEY);
+    if (!id) {
+      id = crypto.randomUUID();
+      sessionStorage.setItem(SESSION_KEY, id);
+    }
+    return id;
+  } catch {
+    return null;
+  }
+}
+
+async function request(path, { method = "GET", body, formData, auth = false, headers: extraHeaders } = {}) {
   // multipart: let the browser set Content-Type (with the boundary) itself
-  const headers = formData ? {} : { "Content-Type": "application/json" };
+  const headers = { ...(formData ? {} : { "Content-Type": "application/json" }), ...extraHeaders };
   if (auth) {
     const token = getToken();
     if (token) headers.Authorization = `Bearer ${token}`;
@@ -38,7 +55,7 @@ async function request(path, { method = "GET", body, formData, auth = false } = 
   });
 
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(data.error || res.statusText, res.status);
+  if (!res.ok) throw new ApiError(data.error || res.statusText, res.status, data.code);
   return data;
 }
 
@@ -48,16 +65,26 @@ export const api = {
   login: (email, password) =>
     request("/auth/login", { method: "POST", body: { email, password } }),
 
-  getProducts: () => request("/products"),
+  getProducts: (category) =>
+    request(`/products${category ? `?category=${encodeURIComponent(category)}` : ""}`),
   getProduct: (id) => request(`/products/${id}`),
-  // formData fields: title, titleEn, category, description, price (USD), photo (File)
+  // formData fields: title, titleEn, category, description, price (USD),
+  // patronBonusMn, patronBonusEn (optional), photo (File)
   createProduct: (formData) => request("/products", { method: "POST", auth: true, formData }),
   // same fields as createProduct; "photo" optional (replaces the current one)
   updateProduct: (id, formData) => request(`/products/${id}`, { method: "PUT", auth: true, formData }),
   deleteProduct: (id) => request(`/products/${id}`, { method: "DELETE", auth: true }),
-  getArtisans: () => request("/artisans"),
+  getArtisans: (category) =>
+    request(`/artisans${category ? `?category=${encodeURIComponent(category)}` : ""}`),
   getMyArtisan: () => request("/artisans/me", { auth: true }),
   updateMyArtisan: (data) => request("/artisans/me", { method: "PUT", auth: true, body: data }),
+
+  // Product page opened. Counted at most once per viewer per 24h (decided by the server).
+  recordView: (id) => {
+    const session = viewerSession();
+    return request(`/products/${id}/view`, { method: "POST", auth: true, headers: session ? { "X-Viewer-Session": session } : {} });
+  },
+  getMyDashboard: () => request("/artisans/me/dashboard", { auth: true }),
 
   getMyLikes: () => request("/products/liked", { auth: true }),
   likeProduct: (id) => request(`/products/${id}/like`, { method: "PUT", auth: true }),
@@ -73,10 +100,18 @@ export const api = {
 
   createOrder: () => request("/orders", { method: "POST", auth: true }),
   getOrders: () => request("/orders", { auth: true }),
+  // Buyer or the order's artisan only
+  getOrder: (id) => request(`/orders/${id}`, { auth: true }),
+  getShopOrders: () => request("/orders/shop", { auth: true }),
+  // status: the next milestone ("in_production" / "shipped" for the artisan, "completed" for the buyer)
+  advanceOrder: (id, status) => request(`/orders/${id}/status`, { method: "PUT", auth: true, body: { status } }),
+  setOrderItemVideo: (id, index, url) =>
+    request(`/orders/${id}/items/${index}/video`, { method: "PUT", auth: true, body: { url } }),
 
   createCommission: (data) => request("/commissions", { method: "POST", auth: true, body: data }),
   getCommissions: (category) =>
     request(`/commissions${category ? `?category=${encodeURIComponent(category)}` : ""}`, { auth: true }),
+  getMyCommissions: () => request("/commissions/mine", { auth: true }),
   submitBid: (id, price, message) =>
     request(`/commissions/${id}/bids`, { method: "POST", auth: true, body: { price, message } }),
   acceptBid: (id, bidId) =>

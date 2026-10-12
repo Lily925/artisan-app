@@ -9,6 +9,11 @@ import Shop from "./components/Shop";
 import ProductDetail from "./components/ProductDetail";
 import Cart from "./components/Cart";
 import ReverseAuction from "./components/ReverseAuction";
+import CommissionBoard from "./components/CommissionBoard";
+import MyCommissions from "./components/MyCommissions";
+import Dashboard from "./components/Dashboard";
+import OrderDetail from "./components/OrderDetail";
+import ShopOrders from "./components/ShopOrders";
 import ArtisanProfileForm from "./components/ArtisanProfileForm";
 import AddProductForm from "./components/AddProductForm";
 import Storefront from "./components/Storefront";
@@ -203,8 +208,13 @@ export default function App() {
   // Ids of products the current user has liked (the heart). Loaded from the API per user.
   const [savedItems, setSavedItems] = useState([]);
   const [products, setProducts] = useState([]);
+  // Shop category filter ("" = all) and the ids the API returned for it (null = not loaded yet).
+  const [shopCategory, setShopCategory] = useState("");
+  const [categoryIds, setCategoryIds] = useState(null);
+  const [catalogVersion, setCatalogVersion] = useState(0); // bumped on every catalog reload
   const [cart, setCart] = useState(null);
   const [orders, setOrders] = useState([]);
+  const [orderView, setOrderView] = useState(null); // { id, back }: the order detail page and where "Back" goes
   const [searchQuery, setSearchQuery] = useState("");
   const [toast, setToast] = useState(null);
   const [currency, setCurrency] = useState("USD");
@@ -228,10 +238,23 @@ export default function App() {
   // Product catalog is public — load it regardless of login state.
   const refreshProducts = () =>
     api.getProducts()
-      .then(list => setProducts(list.map(p => ({ ...p, id: p._id }))))
+      .then(list => { setProducts(list.map(p => ({ ...p, id: p._id }))); setCatalogVersion(v => v + 1); })
       .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { refreshProducts(); }, []);
+
+  // Category filtering is done by the API (?category=). Only the ids are kept so the
+  // shop shows the same product objects as everywhere else (likes, edits stay in sync).
+  // Re-runs on every catalog reload, so added/edited/deleted products are picked up.
+  useEffect(() => {
+    if (!shopCategory) { setCategoryIds(null); return; }
+    let stale = false;
+    setCategoryIds(null);
+    api.getProducts(shopCategory)
+      .then(list => { if (!stale) setCategoryIds(list.map(p => p._id)); })
+      .catch(() => { if (!stale) setCategoryIds([]); });
+    return () => { stale = true; };
+  }, [shopCategory, catalogVersion]);
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2400); };
 
@@ -293,8 +316,14 @@ export default function App() {
       .catch((err) => { setLiked(wasLiked); handleApiError(err); });
   };
 
+  // One shop per order: a translated message instead of the server's English one.
+  const cartError = (err) => {
+    if (err instanceof ApiError && err.code === "OTHER_SHOP") showToast(t.orders.otherShop);
+    else handleApiError(err);
+  };
   const addToCart = (productId, tier, qty = 1) =>
-    api.addCartItem(productId, tier, qty).then((c) => { setCart(c); showToast(t.addCart); }).catch(handleApiError);
+    api.addCartItem(productId, tier, qty).then((c) => { setCart(c); showToast(t.addCart); })
+      .catch((err) => (err instanceof ApiError && err.code === "PATRON_UNAVAILABLE" ? showToast(t.orders.patronUnavailable) : cartError(err)));
   const updateQty = (productId, tier, qty) =>
     api.updateCartItem(productId, tier, qty).then(setCart).catch(handleApiError);
   const removeFromCart = (productId, tier) =>
@@ -303,7 +332,8 @@ export default function App() {
     api.createOrder()
       .then(() => Promise.all([refreshCart(), refreshOrders()]))
       .then(() => { showToast(t.submitted); navigate("profile"); })
-      .catch(handleApiError);
+      .catch(cartError);
+  const openOrder = (id, back = "profile") => { setOrderView({ id, back }); navigate("order-detail"); window.scrollTo(0, 0); };
 
   const submitCommission = (data) =>
     api.createCommission(data).catch((err) => {
@@ -314,6 +344,8 @@ export default function App() {
   const openProduct = (p) => {
     setSelected(p);
     navigate("detail");
+    // Feeds the owning artisan's dashboard; the server ignores repeats and owner views.
+    api.recordView(p.id).catch(() => {});
   };
 
   // Shop page (products) and personal profile page for one artisan. Moving between
@@ -370,7 +402,10 @@ export default function App() {
   const storeArtisanLive = liveArtisan(storeArtisan);
   const profileArtisanLive = liveArtisan(profileArtisan);
 
+  const openShop = (category = "") => { setShopCategory(category); navigate("shop"); };
+  const categoryLoading = Boolean(shopCategory) && categoryIds === null;
   const filtered = products.filter(p => {
+    if (shopCategory && !categoryIds?.includes(p.id)) return false;
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     const name = (lang==="mn" ? p.title : p.titleEn || p.title) || "";
@@ -415,13 +450,14 @@ export default function App() {
         <Home
           lang={lang} t={t} prods={products}
           savedItems={savedItems} toggleSave={toggleSave} openProduct={openProduct}
-          fmt={fmtBasic} navigate={navigate}
+          fmt={fmtBasic} navigate={navigate} openShop={openShop}
         />
       )}
 
       {page==="shop" && (
         <Shop
-          lang={lang} t={t} filtered={filtered}
+          lang={lang} t={t} filtered={filtered} loading={categoryLoading}
+          category={shopCategory} openShop={openShop}
           savedItems={savedItems} toggleSave={toggleSave} openProduct={openProduct}
           fmt={fmtBasic} navigate={navigate}
         />
@@ -462,7 +498,40 @@ export default function App() {
       )}
 
       {page==="commission" && (
-        <ReverseAuction t={t} navigate={navigate} onSubmit={submitCommission} />
+        <ReverseAuction t={t} navigate={navigate} onSubmit={submitCommission} isArtisan={currentUser.role==="artisan"} />
+      )}
+
+      {page==="commission-board" && ["artisan","admin"].includes(currentUser.role) && (
+        <CommissionBoard
+          key={pageKey} t={t} fmtAmt={fmtAmt} canBid={currentUser.role==="artisan"}
+          onApiError={handleApiError} showToast={showToast}
+        />
+      )}
+
+      {page==="dashboard" && currentUser.role==="artisan" && (
+        <Dashboard
+          key={pageKey} t={t} lang={lang} fmtAmt={fmtAmt} rateMnt={rates.MNT} currency={currency}
+          navigate={navigate} onApiError={handleApiError}
+        />
+      )}
+
+      {page==="order-detail" && orderView && (
+        <OrderDetail
+          key={orderView.id} t={t} lang={lang} orderId={orderView.id} fmtAmt={fmtAmt}
+          onBack={() => navigate(orderView.back)} onApiError={handleApiError} showToast={showToast}
+          onChanged={refreshOrders}
+        />
+      )}
+
+      {page==="shop-orders" && currentUser.role==="artisan" && (
+        <ShopOrders key={pageKey} t={t} fmtAmt={fmtAmt} navigate={navigate} openOrder={openOrder} onApiError={handleApiError} />
+      )}
+
+      {page==="my-commissions" && (
+        <MyCommissions
+          key={pageKey} t={t} fmtAmt={fmtAmt} navigate={navigate}
+          onApiError={handleApiError} showToast={showToast}
+        />
       )}
 
       {page==="shop-settings" && currentUser.role==="artisan" && (
@@ -488,7 +557,7 @@ export default function App() {
         />
       )}
 
-      <div style={{ display: ["home","shop","detail","cart","commission","shop-settings","add-product","edit-product","storefront","artisan-profile"].includes(page) ? "none" : "block", maxWidth:430, margin:"0 auto", position:"relative" }}>
+      <div style={{ display: ["home","shop","detail","cart","commission","commission-board","my-commissions","dashboard","order-detail","shop-orders","shop-settings","add-product","edit-product","storefront","artisan-profile"].includes(page) ? "none" : "block", maxWidth:430, margin:"0 auto", position:"relative" }}>
 
       {/* ── SAVED ── */}
       {page==="saved" && (
@@ -539,14 +608,28 @@ export default function App() {
             <div style={{ display:"inline-block", background:"#fff0eb", color:"#e05d26", border:"1px solid #fddcc8", borderRadius:20, padding:"4px 14px", fontSize:12, fontWeight:600 }}>{currentUser.role}</div>
             {currentUser.role === "artisan" && (
               <div style={{ marginTop:16, display:"flex", gap:8, justifyContent:"center", flexWrap:"wrap" }}>
+                <button type="button" className="ebtn" style={{ padding:"10px 20px", fontSize:13 }} onClick={() => navigate("dashboard")}>
+                  {t.dashboard.open}
+                </button>
+                <button type="button" className="ebtn" style={{ padding:"10px 20px", fontSize:13 }} onClick={() => navigate("shop-orders")}>
+                  {t.orders.shopOpen}
+                </button>
                 <button type="button" className="ebtn" style={{ padding:"10px 20px", fontSize:13 }} onClick={() => navigate("add-product")}>
                   {t.addProduct.open}
                 </button>
                 <button type="button" className="obtn" style={{ padding:"10px 20px", fontSize:13 }} onClick={() => navigate("shop-settings")}>
                   {t.shopSettings.open}
                 </button>
+                <button type="button" className="obtn" style={{ padding:"10px 20px", fontSize:13 }} onClick={() => navigate("commission-board")}>
+                  {t.commissions.boardOpen}
+                </button>
               </div>
             )}
+            <div style={{ marginTop:12 }}>
+              <button type="button" className="obtn" style={{ padding:"10px 20px", fontSize:13 }} onClick={() => navigate("my-commissions")}>
+                {t.commissions.mineOpen}
+              </button>
+            </div>
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
             {[[cart?.items?.length || 0,"🛒",t.cart],[savedItems.length,"🤍",t.saved]].map(([val,icon,lbl]) => (
@@ -559,18 +642,19 @@ export default function App() {
           </div>
 
           <div style={{ background:"white", borderRadius:14, padding:"16px 18px", border:"1px solid #ede8e0", marginBottom:14 }}>
-            <div style={{ fontWeight:700, fontSize:14, marginBottom:12, color:"#111" }}>Order History</div>
+            <div style={{ fontWeight:700, fontSize:14, marginBottom:12, color:"#111" }}>{t.orders.historyTitle}</div>
             {orders.length === 0 ? (
-              <div style={{ fontSize:13, color:"#bbb" }}>No orders yet.</div>
+              <div style={{ fontSize:13, color:"#bbb" }}>{t.orders.none}</div>
             ) : (
               orders.map(o => (
-                <div key={o._id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 0", borderBottom:"1px solid #f0ece8" }}>
+                <button key={o._id} type="button" onClick={() => openOrder(o._id)}
+                  style={{ display:"flex", width:"100%", justifyContent:"space-between", alignItems:"center", padding:"10px 0", background:"none", border:"none", borderBottom:"1px solid #f0ece8", cursor:"pointer", textAlign:"left", fontFamily:"inherit" }}>
                   <div>
-                    <div style={{ fontSize:13, fontWeight:600, color:"#222" }}>{o.items.length} item{o.items.length!==1?"s":""}</div>
-                    <div style={{ fontSize:11, color:"#bbb" }}>{new Date(o.createdAt).toLocaleDateString()} · {o.status}</div>
+                    <div style={{ fontSize:13, fontWeight:600, color:"#222" }}>{t.orders.items(o.items.length)}</div>
+                    <div style={{ fontSize:11, color:"#bbb" }}>{new Date(o.createdAt).toLocaleDateString()} · {t.orders.status[o.status] || o.status}</div>
                   </div>
-                  <div style={{ fontWeight:700, fontSize:14, color:"#e05d26" }}>${o.total.toFixed(2)}</div>
-                </div>
+                  <div style={{ fontWeight:700, fontSize:14, color:"#e05d26" }}>{fmtAmt(o.total)} ›</div>
+                </button>
               ))
             )}
           </div>

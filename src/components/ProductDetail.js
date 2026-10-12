@@ -5,8 +5,8 @@ import { placeholderEmoji } from "../placeholders";
 import { artisanInfo } from "../artisanInfo";
 import InstagramIcon from "./InstagramIcon";
 import { assetUrl } from "../api";
+import { bonusText, offeredTiers } from "../tiers";
 
-const TIER_KEYS = ["basic", "story", "patron"];
 const TIER_DISPLAY = { basic: "Basic", story: "Story", patron: "Patron" };
 
 export default function ProductDetail({ lang, t, selected, savedItems, toggleSave, addToCart, fmtAmt, navigate, openStorefront, openArtisanProfile, currentUserId, onEdit, onDelete }) {
@@ -29,11 +29,15 @@ export default function ProductDetail({ lang, t, selected, savedItems, toggleSav
   const icon = placeholderEmoji(selected.category);
   const primaryName = lang === "mn" ? selected.title : selected.titleEn || selected.title;
 
+  const tiers = offeredTiers(selected);
+  // A tier picked on another product may not be offered here (no Patron bonus).
+  const tier = tiers.includes(selectedTier) ? selectedTier : "basic";
   const tierPrice = (key) => selected.pricingTiers[key].price;
-  const selectedTierPrice = fmtAmt(tierPrice(selectedTier));
+  const selectedTierPrice = fmtAmt(tierPrice(tier));
+  const tierText = (key) => (key === "patron" ? t.tierText.patron(bonusText(selected.patronBonus, lang)) : t.tierText[key]);
 
   const handleAddToCart = () => {
-    addToCart(selected.id, selectedTier, 1);
+    addToCart(selected.id, tier, 1);
   };
 
   return (
@@ -118,9 +122,11 @@ export default function ProductDetail({ lang, t, selected, savedItems, toggleSav
                   {t.byArtisan(ownerName)}
                 </button>
               )}
-              <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:700, color:COLORS.accentDark, background:COLORS.accentSoft, padding:"3px 8px", borderRadius:2 }}>
-                ✓ {t.homePage.certified}
-              </span>
+              {selected.artisan?.certified && (
+                <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:700, color:COLORS.accentDark, background:COLORS.accentSoft, padding:"3px 8px", borderRadius:2 }}>
+                  ✓ {t.homePage.certified}
+                </span>
+              )}
             </div>
             {(instagramUrl || contactInfo) && (
               <div style={{ display:"flex", flexWrap:"wrap", alignItems:"center", gap:"6px 14px", marginBottom:18, marginLeft:42 }}>
@@ -140,18 +146,18 @@ export default function ProductDetail({ lang, t, selected, savedItems, toggleSav
 
             <div style={{ marginBottom:20 }}>
               <div className="a-label">{d.tierSectionTitle}</div>
-              <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10 }}>
-                {TIER_KEYS.map((key) => (
+              <div style={{ display:"grid", gridTemplateColumns:`repeat(${tiers.length},1fr)`, gap:10 }}>
+                {tiers.map((key) => (
                   <button
                     key={key}
                     type="button"
-                    className={`a-tier-card${selectedTier === key ? " selected" : ""}`}
-                    aria-pressed={selectedTier === key}
+                    className={`a-tier-card${tier === key ? " selected" : ""}`}
+                    aria-pressed={tier === key}
                     onClick={() => setSelectedTier(key)}
                   >
                     <div style={{ fontWeight:700, fontSize:13, color:COLORS.ink, marginBottom:2 }}>{TIER_DISPLAY[key]}</div>
                     <div style={{ fontWeight:700, fontSize:15, color:COLORS.ink, marginBottom:4 }}>{fmtAmt(tierPrice(key))}</div>
-                    <div style={{ fontSize:11, color:COLORS.inkSoft, lineHeight:1.4 }}>{selected.pricingTiers[key].label}</div>
+                    <div style={{ fontSize:11, color:COLORS.inkSoft, lineHeight:1.4, overflowWrap:"anywhere" }}>{tierText(key)}</div>
                   </button>
                 ))}
               </div>
