@@ -2,13 +2,25 @@ import { COLORS, FONT_SERIF, FONT_SANS } from "../theme";
 import { placeholderEmoji } from "../placeholders";
 import { artisanInfo } from "../artisanInfo";
 import { bonusText } from "../tiers";
+import { useState } from "react";
+import PayPalCheckout from "./PayPalCheckout";
+import ShippingAddressForm, { emptyAddress, validateAddress } from "./ShippingAddressForm";
 
 const TIER_DISPLAY = { basic: "Basic", story: "Story", patron: "Patron" };
 
-export default function Cart({ lang, t, cart, onUpdateQty, onRemove, onCheckout, fmtAmt, navigate }) {
+export default function Cart({ lang, t, cart, onUpdateQty, onRemove, onPaid, onApiError, fmtAmt, navigate }) {
   const c = t.cartPage;
   const items = cart?.items || [];
   const isEmpty = items.length === 0;
+  const [address, setAddress] = useState(emptyAddress);
+  const [addressErrors, setAddressErrors] = useState({});
+  // Called by the PayPal button: shows what's missing, or returns the trimmed address.
+  const getShippingAddress = () => {
+    const errors = validateAddress(address, t.shipping);
+    setAddressErrors(errors);
+    if (Object.keys(errors).length) return null;
+    return Object.fromEntries(Object.entries(address).map(([k, v]) => [k, v.trim()]));
+  };
 
   const lineTotal = (item) => item.product.pricingTiers[item.tier].price * item.qty;
   // Computed on the server by the same function checkout uses, so the preview matches the charge.
@@ -88,7 +100,9 @@ export default function Cart({ lang, t, cart, onUpdateQty, onRemove, onCheckout,
               <div style={{ display:"flex", justifyContent:"space-between", fontFamily:FONT_SERIF, fontSize:20, fontWeight:700, color:COLORS.ink, marginBottom:20 }}>
                 <span>{c.total}</span><span>{fmtAmt(totalUSD)}</span>
               </div>
-              <button type="button" className="a-btn-primary" style={{ width:"100%", marginBottom:14 }} onClick={onCheckout}>{c.checkout}</button>
+              <ShippingAddressForm text={t.shipping} value={address} errors={addressErrors}
+                onChange={(next) => { setAddress(next); if (Object.keys(addressErrors).length) setAddressErrors(validateAddress(next, t.shipping)); }} />
+              <PayPalCheckout t={t} onPaid={onPaid} onApiError={onApiError} getShippingAddress={getShippingAddress} />
               <div style={{ display:"flex", gap:8, fontFamily:FONT_SANS, fontSize:11, color:COLORS.inkSoft, lineHeight:1.5 }}>
                 <span aria-hidden="true">🔒</span>
                 <span>{c.escrowNote}</span>

@@ -182,6 +182,18 @@ export default function Dashboard({ t, lang, fmtAmt, rateMnt, currency, navigate
         <StatTile label={d.likes} value={fmtCount(totals.likes)} />
       </div>
 
+      {data.payouts && (
+        <section aria-labelledby="dash-payouts-title" style={{ marginBottom:12 }}>
+          <h2 id="dash-payouts-title" className="a-label" style={{ marginBottom:8 }}>{d.payoutsTitle}</h2>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(150px, 1fr))", gap:12 }}>
+            <StatTile label={d.payoutReleased} value={fmtAmt(data.payouts.released)} sub={d.payoutReleasedHint} />
+            <StatTile label={d.payoutHeld} value={fmtAmt(data.payouts.held)} sub={d.payoutHeldHint} />
+            <StatTile label={d.payoutWaiting} value={fmtAmt(data.payouts.waiting)}
+              sub={data.payouts.hasPayoutEmail ? d.payoutWaitingHint : d.payoutNoEmail} />
+          </div>
+        </section>
+      )}
+
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(240px, 1fr))", gap:12, marginBottom:32 }}>
         <div className="a-info-block" style={{ display:"flex", gap:24, flexWrap:"wrap" }}>
           <div>

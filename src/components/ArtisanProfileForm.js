@@ -9,6 +9,7 @@ const toForm = (a) => ({
   contactInfo: a.contactInfo || "",
   location: a.location || "",
   yearsExperience: a.yearsExperience === null || a.yearsExperience === undefined ? "" : String(a.yearsExperience),
+  payoutEmail: a.payoutEmail || "",
 });
 
 // Lets a logged-in artisan edit the self-service parts of their own shop profile.
@@ -42,6 +43,7 @@ export default function ArtisanProfileForm({ t, navigate, onSaved, onApiError })
     api.updateMyArtisan({
       ...form,
       instagramHandle: form.instagramHandle.trim().replace(/^@+/, ""),
+      payoutEmail: form.payoutEmail.trim(),
       yearsExperience: yearsText === "" ? null : Number(yearsText),
     })
       .then((a) => {
@@ -126,6 +128,13 @@ export default function ArtisanProfileForm({ t, navigate, onSaved, onApiError })
                   aria-describedby="sp-contact-hint"
                   value={form.contactInfo} onChange={update("contactInfo")} />
                 <div id="sp-contact-hint" style={{ fontFamily:FONT_SANS, fontSize:12, color:COLORS.inkSoft, marginTop:6 }}>{s.contactHint}</div>
+              </div>
+
+              <div style={{ marginBottom:24 }}>
+                <label className="a-label" htmlFor="sp-payout">{s.payoutEmail}</label>
+                <input id="sp-payout" className="a-input" type="email" autoComplete="email" maxLength={254}
+                  aria-describedby="sp-payout-hint" value={form.payoutEmail} onChange={update("payoutEmail")} />
+                <div id="sp-payout-hint" style={{ fontFamily:FONT_SANS, fontSize:12, color:COLORS.inkSoft, marginTop:6 }}>{s.payoutEmailHint}</div>
               </div>
 
               {error && (

@@ -328,11 +328,9 @@ export default function App() {
     api.updateCartItem(productId, tier, qty).then(setCart).catch(handleApiError);
   const removeFromCart = (productId, tier) =>
     api.removeCartItem(productId, tier).then(setCart).catch(handleApiError);
-  const checkout = () =>
-    api.createOrder()
-      .then(() => Promise.all([refreshCart(), refreshOrders()]))
-      .then(() => { showToast(t.submitted); navigate("profile"); })
-      .catch(cartError);
+  // After PayPal capture: the server has created the paid order and emptied those cart lines.
+  const onPaid = (orderId) =>
+    Promise.all([refreshCart(), refreshOrders()]).then(() => { showToast(t.paypal.paid); openOrder(orderId); });
   const openOrder = (id, back = "profile") => { setOrderView({ id, back }); navigate("order-detail"); window.scrollTo(0, 0); };
 
   const submitCommission = (data) =>
@@ -493,7 +491,7 @@ export default function App() {
       {page==="cart" && (
         <Cart
           lang={lang} t={t} cart={cart} onUpdateQty={updateQty} onRemove={removeFromCart}
-          onCheckout={checkout} fmtAmt={fmtAmt} navigate={navigate}
+          onPaid={onPaid} onApiError={handleApiError} fmtAmt={fmtAmt} navigate={navigate}
         />
       )}
 

@@ -19,6 +19,40 @@ const orderItemSchema = new mongoose.Schema(
   { _id: false }
 );
 
+// Where the artisan sends the order. Collected at checkout; shown only to the order's
+// buyer and artisan. Orders from before 2026-10-12 have none.
+const shippingAddressSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true },
+    address: { type: String, required: true },
+    city: { type: String, required: true },
+    country: { type: String, required: true },
+    phone: { type: String, required: true },
+  },
+  { _id: false }
+);
+
+// One milestone payout to the artisan (see utils/payouts.js). Amounts in USD.
+// status: held -> due (milestone reached) -> sending -> sent -> paid,
+//         or pending_payout (no payout email yet) / failed (see error).
+const releaseSchema = new mongoose.Schema(
+  {
+    milestone: { type: String, enum: ["in_production", "shipped", "completed"], required: true },
+    percent: { type: Number, required: true },
+    amount: { type: Number, required: true },
+    status: { type: String, enum: ["held", "due", "pending_payout", "sending", "sent", "paid", "failed"], default: "held" },
+    dueAt: { type: Date },
+    senderBatchId: { type: String }, // our id for the PayPal payout batch: one per release, so it can't be paid twice
+    payoutBatchId: { type: String }, // PayPal's batch id once PayPal accepted the payout
+    payoutItemStatus: { type: String }, // PayPal's latest item status (PENDING, SUCCESS, UNCLAIMED, ...)
+    receiver: { type: String }, // payout email used (artisan-only)
+    sentAt: { type: Date },
+    paidAt: { type: Date },
+    error: { type: String },
+  },
+  { _id: false }
+);
+
 // When each milestone was reached. Orders placed before milestones existed have none;
 // their "Ordered" date is createdAt.
 const statusEventSchema = new mongoose.Schema(
@@ -40,6 +74,19 @@ const orderSchema = new mongoose.Schema(
       default: "pending",
     },
     statusHistory: { type: [statusEventSchema], default: [] },
+    shippingAddress: { type: shippingAddressSchema, default: undefined },
+    // Artisan payouts: 30% at In production, 30% at Shipped, 40% at Completed of
+    // total - commissionFee (item prices + shipping). Created when the payment is captured.
+    releases: { type: [releaseSchema], default: undefined },
+    // Set when the order was paid through PayPal (orders placed before payments have none).
+    payment: {
+      provider: { type: String },
+      paypalOrderId: { type: String },
+      captureId: { type: String },
+      amount: { type: Number },
+      currency: { type: String },
+      capturedAt: { type: Date },
+    },
   },
   { timestamps: true }
 );

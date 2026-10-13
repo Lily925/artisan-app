@@ -13,7 +13,7 @@ async function userFromToken(req) {
 
   let payload;
   try {
-    payload = jwt.verify(token, process.env.JWT_SECRET);
+    payload = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ["HS256"] });
   } catch (err) {
     return { error: "Invalid or expired token" };
   }

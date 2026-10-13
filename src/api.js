@@ -98,7 +98,14 @@ export const api = {
   removeCartItem: (productId, tier) =>
     request("/cart", { method: "DELETE", auth: true, body: { productId, tier } }),
 
-  createOrder: () => request("/orders", { method: "POST", auth: true }),
+  // PayPal checkout: the server builds the PayPal order from the cart, then captures it
+  // and creates the paid order. Returns { id } / { orderId }.
+  getPaypalConfig: () => request("/payments/paypal/config"),
+  // shippingAddress: { name, address, city, country, phone }
+  createPaypalOrder: (shippingAddress) =>
+    request("/payments/paypal/orders", { method: "POST", auth: true, body: { shippingAddress } }),
+  capturePaypalOrder: (paypalOrderId) =>
+    request(`/payments/paypal/orders/${encodeURIComponent(paypalOrderId)}/capture`, { method: "POST", auth: true }),
   getOrders: () => request("/orders", { auth: true }),
   // Buyer or the order's artisan only
   getOrder: (id) => request(`/orders/${id}`, { auth: true }),

@@ -33,7 +33,19 @@ const artisanSchema = new mongoose.Schema(
       validate: { validator: (v) => v === null || Number.isInteger(v), message: "Years of experience must be a whole number" },
     },
     location: { type: String, default: "", trim: true, maxlength: [100, "Location must be 100 characters or fewer"] },
-    // Deliberately no phone/email here: public contact is Instagram-only.
+    // Deliberately no public phone/email: public contact is Instagram-only.
+
+    // PayPal email for milestone payouts. Private: hidden from every query unless selected
+    // with "+payoutEmail" (only GET/PUT /api/artisans/me and the payout code do that).
+    payoutEmail: {
+      type: String,
+      default: "",
+      trim: true,
+      lowercase: true,
+      maxlength: [254, "Payout email is too long"],
+      match: [/^$|^[^\s@]+@[^\s@]+\.[^\s@]+$/, "Enter a valid PayPal email for payouts"],
+      select: false,
+    },
   },
   { timestamps: true }
 );

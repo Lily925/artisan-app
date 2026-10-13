@@ -6,23 +6,21 @@ const Artisan = require("../models/Artisan");
 const { VIDEO_TIERS } = require("../config/constants");
 const { offersPatron } = require("../utils/pricing");
 const { orderTotals } = require("../utils/orderTotals");
+const payouts = require("../utils/payouts");
 
-async function createOrder(req, res) {
-  const cart = await Cart.findOne({ user: req.user.id }).populate("items.product");
-  if (!cart || cart.items.length === 0) {
-    return res.status(400).json({ error: "Cart is empty" });
-  }
-
+// Turns the buyer's cart into order items + totals, or explains why it can't be ordered.
+// Used by PayPal checkout (paymentController.js). Returns { cart, items, totals } or { error }.
+async function buildOrderFromCart(userId) {
+  const fail = (status, error, code) => ({ error: { status, body: { error, ...(code && { code }) } } });
+  const cart = await Cart.findOne({ user: userId }).populate("items.product");
   // Products deleted since they were added are already pulled from carts, but be safe.
-  const lines = cart.items.filter((i) => i.product);
-  if (lines.length === 0) return res.status(400).json({ error: "Cart is empty" });
+  const lines = (cart?.items || []).filter((i) => i.product);
+  if (lines.length === 0) return fail(400, "Cart is empty", "CART_EMPTY");
   const shops = new Set(lines.map((i) => String(i.product.artisan)));
-  if (shops.size > 1) {
-    return res.status(409).json({ error: "An order can only contain products from one shop", code: "OTHER_SHOP" });
-  }
+  if (shops.size > 1) return fail(409, "An order can only contain products from one shop", "OTHER_SHOP");
   const noPatron = lines.find((i) => i.tier === "patron" && !offersPatron(i.product));
   if (noPatron) {
-    return res.status(400).json({ error: `The Patron tier is no longer offered for "${noPatron.product.titleEn || noPatron.product.title}". Remove it from your cart.`, code: "PATRON_UNAVAILABLE" });
+    return fail(400, `The Patron tier is no longer offered for "${noPatron.product.titleEn || noPatron.product.title}". Remove it from your cart.`, "PATRON_UNAVAILABLE");
   }
 
   // Prices are re-read from the Product documents here, never trusted from the client.
@@ -31,43 +29,37 @@ async function createOrder(req, res) {
     product: i.product._id,
     artisan: i.product.artisan,
     title: i.product.title,
+    titleEn: i.product.titleEn || "", // only used for the PayPal item name
     tier: i.tier,
     unitPrice: i.product.pricingTiers[i.tier].price,
     qty: i.qty,
     ...(i.tier === "patron" && { patronBonus: { mn: i.product.patronBonus.mn, en: i.product.patronBonus.en } }),
   }));
-
   // Same function as the cart preview, so the charged total matches what the buyer saw.
-  const { subtotal, commissionFee, shipping, total } = orderTotals(items);
+  return { cart, items, totals: orderTotals(items) };
+}
 
-  const order = await Order.create({
-    user: req.user.id,
-    items,
-    subtotal,
-    commissionFee,
-    shipping,
-    total,
-    statusHistory: [{ status: "pending", at: new Date() }],
-  });
-
-  cart.items = [];
-  await cart.save();
-
-  res.status(201).json(order);
+// Orders are only created after a captured PayPal payment (POST /api/payments/paypal/...).
+async function createOrder(req, res) {
+  res.status(410).json({ error: "Checkout is through PayPal: POST /api/payments/paypal/orders", code: "USE_PAYPAL" });
 }
 
 async function listOrders(req, res) {
-  const orders = await Order.find({ user: req.user.id }).sort({ createdAt: -1 });
+  // The buyer's own orders, without the artisan's payout details.
+  const orders = await Order.find({ user: req.user.id })
+    .select("-releases.receiver -releases.error -releases.senderBatchId -releases.payoutBatchId")
+    .sort({ createdAt: -1 });
   res.json(orders);
 }
 
 // ── Order detail, milestones and video delivery ──
-// Milestones: Ordered (pending, or paid once payments exist) -> In production -> Shipped -> Completed.
-// The order's artisan moves it forward one step at a time up to Shipped; only the buyer can
-// confirm receipt (Shipped -> Completed), which is where escrow release will hook in later.
+// Milestones: Ordered (pending = not paid, or paid) -> In production -> Shipped -> Completed.
+// The order's artisan moves it forward one step at a time up to Shipped, starting only once
+// it's paid; only the buyer can confirm receipt (Shipped -> Completed), which is where escrow
+// release will hook in later. Unpaid orders (all from before PayPal) can't be advanced.
 const MILESTONES = ["pending", "in_production", "shipped", "completed"];
 const stepOf = (status) => (status === "paid" ? 0 : MILESTONES.indexOf(status));
-const ARTISAN_NEXT = { pending: "in_production", paid: "in_production", in_production: "shipped" };
+const ARTISAN_NEXT = { paid: "in_production", in_production: "shipped" };
 const BUYER_NEXT = { shipped: "completed" };
 const MAX_VIDEO_URL = 500;
 
@@ -151,8 +143,17 @@ async function orderDetail({ order, artisanId, isBuyer, isArtisan }) {
     commissionFee: order.commissionFee,
     shipping: order.shipping,
     total: order.total,
+    // Only this order's buyer and artisan ever get here; the artisan needs it to send the parcel.
+    shippingAddress: order.shippingAddress || null,
+    payout: payoutView(order, isArtisan),
+    // Both sides see whether and when it was paid; only the buyer gets the PayPal reference.
+    payment: order.payment?.capturedAt
+      ? { paid: true, provider: order.payment.provider, capturedAt: order.payment.capturedAt, ...(isBuyer && { reference: order.payment.captureId }) }
+      : { paid: false },
     actions: {
       artisanNext,
+      // An unpaid order (from before payments existed) can't go into production.
+      artisanWaitingForPayment: isArtisan && order.status === "pending",
       // Shipping a Story/Patron order needs every video attached first.
       artisanBlockedBy: artisanNext === "shipped" && missingVideos > 0 ? "missing_video" : null,
       buyerNext: isBuyer ? BUYER_NEXT[order.status] || null : null,
@@ -161,9 +162,28 @@ async function orderDetail({ order, artisanId, isBuyer, isArtisan }) {
   };
 }
 
+// Released vs held for the order page. The buyer sees amounts and states only; the artisan
+// also sees PayPal's status and why a payout is waiting.
+function payoutView(order, isArtisan) {
+  if (!order.releases?.length) {
+    if (!payouts.isPaidOrder(order)) return null; // unpaid (pre-PayPal) orders have nothing to release
+    return payoutView({ releases: payouts.buildReleases(order) }, isArtisan);
+  }
+  const releases = order.releases.map((r) => ({
+    milestone: r.milestone, percent: r.percent, amount: r.amount, status: r.status,
+    ...(isArtisan && { payoutItemStatus: r.payoutItemStatus || null, sentAt: r.sentAt || null, paidAt: r.paidAt || null, error: r.error || null }),
+  }));
+  const net = order.releases.reduce((s, r) => s + Math.round(r.amount * 100), 0) / 100;
+  return { net, ...payouts.summarize(order.releases), releases };
+}
+
 async function getOrder(req, res) {
   const access = await loadOrderForCaller(req, res);
   if (!access) return;
+  // Pick up PayPal's latest payout status (PENDING -> SUCCESS etc.) before showing it.
+  if (access.order.releases?.some((r) => r.status === "sent")) {
+    access.order = await payouts.refreshSentReleases(access.order._id);
+  }
   res.json(await orderDetail(access));
 }
 
@@ -215,7 +235,15 @@ async function advanceOrder(req, res) {
     { new: true }
   );
   if (!updated) return res.status(409).json({ error: "This order was just updated. Reload and try again.", code: "BAD_STEP" });
-  res.json(await orderDetail({ ...access, order: updated }));
+  // Release this milestone's payout (and retry any earlier one still waiting). A PayPal
+  // problem doesn't undo the step: the release stays pending/failed and shows on the page.
+  let latest = updated;
+  try {
+    latest = (await payouts.processOrderReleases(updated._id)) || updated;
+  } catch (err) {
+    console.error(`Releasing payouts for order ${updated._id} failed: ${err.message}`);
+  }
+  res.json(await orderDetail({ ...access, order: latest }));
 }
 
 // Accepts only absolute https:// links (no embedded credentials), up to MAX_VIDEO_URL characters.
@@ -252,4 +280,4 @@ async function setItemVideo(req, res) {
   res.json(await orderDetail({ ...access, order: updated }));
 }
 
-module.exports = { createOrder, listOrders, getOrder, listShopOrders, advanceOrder, setItemVideo };
+module.exports = { createOrder, listOrders, getOrder, listShopOrders, advanceOrder, setItemVideo, buildOrderFromCart };

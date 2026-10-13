@@ -131,6 +131,57 @@ function StepButton({ o, label, warn, yes, busy, onConfirm }) {
   );
 }
 
+const PAYOUT_TONE = { paid: "ok", sent: "ok", held: "muted", due: "wait", pending_payout: "wait", sending: "wait", failed: "bad" };
+
+function ShippingAddress({ o, address, forArtisan }) {
+  return (
+    <section className="a-info-block" style={{ marginBottom:20 }} aria-labelledby="order-ship-title">
+      <h2 id="order-ship-title" style={{ fontFamily:FONT_SERIF, fontSize:22, fontWeight:600, color:COLORS.ink, margin:"0 0 8px" }}>{forArtisan ? o.shipTo : o.shippingAddress}</h2>
+      {address ? (
+        <address style={{ fontFamily:FONT_SANS, fontSize:14, color:COLORS.ink, lineHeight:1.6, fontStyle:"normal", overflowWrap:"anywhere" }}>
+          {address.name}<br />{address.address}<br />{address.city}, {address.country}<br />{address.phone}
+        </address>
+      ) : <p style={{ fontFamily:FONT_SANS, fontSize:13, color:COLORS.inkSoft, margin:0 }}>{o.noAddress}</p>}
+      {forArtisan && address && <p style={{ fontFamily:FONT_SANS, fontSize:11, color:COLORS.inkSoft, margin:"8px 0 0" }}>{o.addressPrivacy}</p>}
+    </section>
+  );
+}
+
+// The artisan's milestone payouts: released (handed to PayPal) vs held, per milestone.
+function Payouts({ o, payout, fmtAmt, forArtisan }) {
+  const tone = { ok: COLORS.ink, muted: COLORS.inkSoft, wait: COLORS.ink, bad: "#B3261E" };
+  const box = { flex:"1 1 120px", background:COLORS.bgSoft, border:`1px solid ${COLORS.border}`, borderRadius:2, padding:"10px 12px" };
+  const label = { fontFamily:FONT_SANS, fontSize:11, fontWeight:700, color:COLORS.inkSoft, textTransform:"uppercase", letterSpacing:0.4 };
+  const value = { fontFamily:FONT_SANS, fontSize:18, fontWeight:700, color:COLORS.ink, fontVariantNumeric:"tabular-nums" };
+  return (
+    <section className="a-info-block" style={{ marginBottom:20 }} aria-labelledby="order-payout-title">
+      <h2 id="order-payout-title" style={{ fontFamily:FONT_SERIF, fontSize:22, fontWeight:600, color:COLORS.ink, margin:"0 0 4px" }}>{o.payoutTitle}</h2>
+      <p style={{ fontFamily:FONT_SANS, fontSize:12, color:COLORS.inkSoft, margin:"0 0 12px", lineHeight:1.5 }}>{o.payoutIntro(fmtAmt(payout.net))}</p>
+      <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginBottom:12 }}>
+        <div style={box}><div style={label}>{o.released}</div><div style={value}>{fmtAmt(payout.released)}</div></div>
+        <div style={box}><div style={label}>{o.held}</div><div style={value}>{fmtAmt(payout.held)}</div></div>
+        {payout.waiting > 0 && <div style={box}><div style={label}>{o.waiting}</div><div style={value}>{fmtAmt(payout.waiting)}</div></div>}
+      </div>
+      <table style={{ width:"100%", borderCollapse:"collapse" }}>
+        <tbody>
+          {payout.releases.map((r) => (
+            <tr key={r.milestone} style={{ borderTop:`1px solid ${COLORS.border}` }}>
+              <td style={{ fontFamily:FONT_SANS, fontSize:13, color:COLORS.ink, padding:"8px 0" }}>{o.status[r.milestone]} · {r.percent}%</td>
+              <td style={{ fontFamily:FONT_SANS, fontSize:13, color:COLORS.ink, padding:"8px 8px", textAlign:"right", fontVariantNumeric:"tabular-nums" }}>{fmtAmt(r.amount)}</td>
+              <td style={{ fontFamily:FONT_SANS, fontSize:12, fontWeight:700, color:tone[PAYOUT_TONE[r.status]], padding:"8px 0", textAlign:"right" }}>
+                {o.releaseStatus[r.status]}
+                {forArtisan && r.status === "pending_payout" && <div style={{ fontWeight:400, color:COLORS.inkSoft }}>{o.addPayoutEmail}</div>}
+                {forArtisan && r.status === "failed" && r.error && <div style={{ fontWeight:400, color:COLORS.inkSoft }}>{r.error}</div>}
+                {forArtisan && r.status === "sent" && r.payoutItemStatus && <div style={{ fontWeight:400, color:COLORS.inkSoft }}>PayPal: {r.payoutItemStatus}</div>}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
 export default function OrderDetail({ t, lang, orderId, fmtAmt, onBack, onApiError, showToast, onChanged }) {
   const o = t.orders;
   const [order, setOrder] = useState(null);
@@ -184,6 +235,11 @@ export default function OrderDetail({ t, lang, orderId, fmtAmt, onBack, onApiErr
         {o.placed(fmtDate(order.createdAt))} · {o.from(shopName)}
         {viewer.isArtisan && <> · {o.privacy}</>}
       </p>
+      <p style={{ fontFamily:FONT_SANS, fontSize:13, color: order.payment?.paid ? COLORS.ink : COLORS.inkSoft, margin:"-16px 0 24px" }}>
+        {order.payment?.paid
+          ? <>{o.paidWith(fmtDate(order.payment.capturedAt))}{order.payment.reference && <> · {o.reference}: {order.payment.reference}</>}</>
+          : o.notPaid}
+      </p>
 
       <section className="a-info-block" style={{ marginBottom:20 }} aria-label={o.status[order.status]}>
         {cancelled
@@ -205,7 +261,7 @@ export default function OrderDetail({ t, lang, orderId, fmtAmt, onBack, onApiErr
             )}
             {!actions.artisanNext && !actions.buyerNext && order.status !== "completed" && (
               <p style={{ fontFamily:FONT_SANS, fontSize:13, color:COLORS.inkSoft, margin:0 }}>
-                {order.status === "shipped" ? o.waitingBuyer : o.waitingArtisan}
+                {actions.artisanWaitingForPayment ? o.waitingPayment : order.status === "shipped" ? o.waitingBuyer : o.waitingArtisan}
               </p>
             )}
             {/* the missing-video note is already shown above; don't repeat it */}
@@ -213,6 +269,11 @@ export default function OrderDetail({ t, lang, orderId, fmtAmt, onBack, onApiErr
           </div>
         )}
       </section>
+
+      {(viewer.isArtisan || viewer.isBuyer) && (order.shippingAddress || order.payment?.paid) && (
+        <ShippingAddress o={o} address={order.shippingAddress} forArtisan={viewer.isArtisan} />
+      )}
+      {order.payout && <Payouts o={o} payout={order.payout} fmtAmt={fmtAmt} forArtisan={viewer.isArtisan} />}
 
       <section className="a-info-block" style={{ marginBottom:20 }} aria-labelledby="order-items-title">
         <h2 id="order-items-title" style={sectionTitle}>{o.itemsTitle}</h2>

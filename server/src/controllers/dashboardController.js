@@ -5,6 +5,7 @@ const User = require("../models/User");
 const { ProductViewDaily } = require("../models/ProductView");
 const { SHOP_TIME_ZONE, shopDay, lastShopDays } = require("../utils/dates");
 const { DEMO_EMAIL_DOMAIN } = require("../seed/demoData");
+const payouts = require("../utils/payouts");
 
 const STATUSES = ["pending", "paid", "in_production", "shipped", "completed", "cancelled"];
 const CHART_DAYS = 30;
@@ -19,7 +20,7 @@ const DEMO_EMAIL = new RegExp(`${escapeRegex(DEMO_EMAIL_DOMAIN)}$`);
 // Sales = orders placed on the platform, whatever their payment state (PayPal isn't
 // integrated yet). Cancelled orders are left out of every total except the status counts.
 async function getMyDashboard(req, res) {
-  const artisan = await Artisan.findOne({ user: req.user.id }).select("_id");
+  const artisan = await Artisan.findOne({ user: req.user.id }).select("+payoutEmail");
   if (!artisan) return res.status(404).json({ error: "No artisan profile is linked to this account" });
 
   const products = await Product.find({ artisan: artisan._id })
@@ -32,7 +33,7 @@ async function getMyDashboard(req, res) {
   // matched through the product (so they're lost if that product was deleted).
   const orders = await Order.find({
     $or: [{ "items.artisan": artisan._id }, { "items.product": { $in: productIds } }],
-  }).select("user items status createdAt");
+  }).select("user items status createdAt total commissionFee payment releases");
   const isMine = (item) => (item.artisan ? item.artisan.equals(artisan._id) : ownProduct.has(String(item.product)));
 
   const days = lastShopDays(CHART_DAYS);
@@ -41,6 +42,8 @@ async function getMyDashboard(req, res) {
   const perProduct = new Map(products.map((p) => [String(p._id), { units: 0, revenue: 0, orders: 0 }]));
   const deletedTitles = new Map(); // sales of products that no longer exist, by product id
   const ordersByBuyer = new Map();
+  // Milestone payouts (USD cents) over paid, non-cancelled orders; see utils/payouts.js.
+  const payoutCents = { released: 0, held: 0, waiting: 0 };
   let orderCount = 0;
   let units = 0;
   let revenue = 0;
@@ -50,6 +53,10 @@ async function getMyDashboard(req, res) {
     if (items.length === 0) continue;
     statusCounts[order.status] = (statusCounts[order.status] || 0) + 1;
     if (order.status === "cancelled") continue;
+    if (payouts.isPaidOrder(order)) {
+      const s = payouts.summarize(order.releases?.length ? order.releases : payouts.buildReleases(order));
+      for (const k of Object.keys(payoutCents)) payoutCents[k] += Math.round(s[k] * 100);
+    }
 
     orderCount++;
     const buyer = String(order.user);
@@ -139,6 +146,11 @@ async function getMyDashboard(req, res) {
       repeatBuyers: buyerOrderCounts.filter((n) => n >= 2).length,
     },
     statusCounts,
+    // released = handed to PayPal; held = milestone not reached; waiting = reached, not sent yet
+    payouts: {
+      released: payoutCents.released / 100, held: payoutCents.held / 100, waiting: payoutCents.waiting / 100,
+      hasPayoutEmail: Boolean(artisan.payoutEmail),
+    },
     demo: { orders: demoOrders, views: demoViews },
     products: productRows,
     daily: days.map((d) => {

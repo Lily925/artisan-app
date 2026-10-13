@@ -1,5 +1,6 @@
 const Artisan = require("../models/Artisan");
 const Product = require("../models/Product");
+const { sendPendingForArtisan } = require("../utils/payouts");
 
 // Fields an artisan may change on their own profile, with the JSON type each
 // accepts. Everything else (shopName, specialty, certified, photoUrl, user) stays
@@ -10,6 +11,7 @@ const SELF_EDITABLE_FIELDS = {
   contactInfo: "string",
   location: "string",
   yearsExperience: "number",
+  payoutEmail: "string", // private (select: false); PayPal email for milestone payouts
 };
 
 // Public endpoints expose the artisan's name only — never email (contact is Instagram-only).
@@ -32,13 +34,14 @@ async function getArtisan(req, res) {
 }
 
 async function getMyArtisan(req, res) {
-  const artisan = await Artisan.findOne({ user: req.user.id }).populate("user", "name email");
+  const artisan = await Artisan.findOne({ user: req.user.id }).select("+payoutEmail").populate("user", "name email");
   if (!artisan) return res.status(404).json({ error: "No artisan profile is linked to this account" });
   res.json(artisan);
 }
 
 async function updateMyArtisan(req, res) {
-  const artisan = await Artisan.findOne({ user: req.user.id });
+  const artisan = await Artisan.findOne({ user: req.user.id }).select("+payoutEmail");
+  const previousPayoutEmail = artisan?.payoutEmail || "";
   if (!artisan) return res.status(404).json({ error: "No artisan profile is linked to this account" });
 
   for (const [field, type] of Object.entries(SELF_EDITABLE_FIELDS)) {
@@ -60,8 +63,18 @@ async function updateMyArtisan(req, res) {
     throw err;
   }
 
+  // A new payout email: send the releases that were waiting for one.
+  let payoutsSent = 0;
+  if (artisan.payoutEmail && artisan.payoutEmail !== previousPayoutEmail) {
+    try {
+      payoutsSent = await sendPendingForArtisan(artisan._id);
+    } catch (err) {
+      console.error(`Sending pending payouts for artisan ${artisan._id} failed: ${err.message}`);
+    }
+  }
+
   await artisan.populate("user", "name email");
-  res.json(artisan);
+  res.json({ ...artisan.toJSON(), payoutOrdersProcessed: payoutsSent });
 }
 
 module.exports = { listArtisans, getArtisan, getMyArtisan, updateMyArtisan };
