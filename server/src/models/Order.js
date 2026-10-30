@@ -8,6 +8,9 @@ const orderItemSchema = new mongoose.Schema(
     // Orders placed before this field existed don't have it (matched via the product instead).
     artisan: { type: mongoose.Schema.Types.ObjectId, ref: "Artisan" },
     title: { type: String, required: true },
+    // Cover photo at purchase time, so later product edits (or deletion) don't change the order.
+    // Orders from before 2026-10-15 don't have it and fall back to the product's current cover.
+    image: { type: String, default: "" },
     tier: { type: String, enum: TIERS, required: true },
     unitPrice: { type: Number, required: true },
     qty: { type: Number, required: true },

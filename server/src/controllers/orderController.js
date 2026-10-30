@@ -18,6 +18,10 @@ async function buildOrderFromCart(userId) {
   if (lines.length === 0) return fail(400, "Cart is empty", "CART_EMPTY");
   const shops = new Set(lines.map((i) => String(i.product.artisan)));
   if (shops.size > 1) return fail(409, "An order can only contain products from one shop", "OTHER_SHOP");
+  const hidden = lines.find((i) => i.product.isHidden);
+  if (hidden) {
+    return fail(409, `"${hidden.product.titleEn || hidden.product.title}" isn't available right now. Remove it from your cart.`, "PRODUCT_UNAVAILABLE");
+  }
   const noPatron = lines.find((i) => i.tier === "patron" && !offersPatron(i.product));
   if (noPatron) {
     return fail(400, `The Patron tier is no longer offered for "${noPatron.product.titleEn || noPatron.product.title}". Remove it from your cart.`, "PATRON_UNAVAILABLE");
@@ -29,6 +33,7 @@ async function buildOrderFromCart(userId) {
     product: i.product._id,
     artisan: i.product.artisan,
     title: i.product.title,
+    image: i.product.images?.[0] || "", // cover snapshot
     titleEn: i.product.titleEn || "", // only used for the PayPal item name
     tier: i.tier,
     unitPrice: i.product.pricingTiers[i.tier].price,
@@ -129,7 +134,7 @@ async function orderDetail({ order, artisanId, isBuyer, isArtisan }) {
         index,
         title: item.title,
         titleEn: product?.titleEn || "",
-        image: product?.images?.[0] || "",
+        image: item.image || product?.images?.[0] || "",
         category: product?.category || "",
         tier: item.tier,
         unitPrice: item.unitPrice,

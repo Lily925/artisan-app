@@ -36,7 +36,7 @@ async function addItem(req, res) {
   const quantity = Math.max(1, Number(qty) || 1);
 
   const product = await Product.findById(productId);
-  if (!product) return res.status(404).json({ error: "Product not found" });
+  if (!product || product.isHidden) return res.status(404).json({ error: "Product not found" });
   if (tier === "patron" && !offersPatron(product)) {
     return res.status(400).json({ error: "The Patron tier isn't offered for this product", code: "PATRON_UNAVAILABLE" });
   }
