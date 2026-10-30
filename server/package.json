@@ -7,7 +7,9 @@
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "seed": "node src/seed/seed.js",
-    "seed:demo": "node src/seed/demo.js"
+    "seed:demo": "node src/seed/demo.js",
+    "test:api": "node tests/register.test.mjs",
+    "test:photos": "node tests/product-photos.test.mjs"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
