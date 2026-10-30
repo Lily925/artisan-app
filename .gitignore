@@ -12,6 +12,7 @@ server/node_modules
 server/.env
 server/.env.*
 !server/.env.example
+!.env.example
 
 # uploaded product photos (local disk storage; see HANDOFF caveat 2)
 server/uploads/
@@ -24,6 +25,7 @@ server/uploads/
 
 # misc
 .DS_Store
+*.code-workspace
 .env.local
 .env.development.local
 .env.test.local
