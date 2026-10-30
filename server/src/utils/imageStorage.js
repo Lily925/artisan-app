@@ -2,30 +2,67 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const multer = require("multer");
+const cloudinary = require("cloudinary").v2;
+const StoredImage = require("../models/StoredImage");
 
-// Photo storage (product photos and profile photos). This is LOCAL DISK storage for
-// development: most hosts wipe the local disk on restart/redeploy, so at deployment
-// this module is the one piece to swap for cloud storage (e.g. Cloudinary). Everything
-// else (routes, validation, the upload forms) stays the same as long as save*Photo
-// keeps returning a URL and delete*Photo accepts one.
+// Photo storage (product photos and profile photos): the one place every upload goes
+// through. Controllers only see URLs: save*Photo returns one, delete*Photo accepts one.
+//
+// Storage backend, chosen once at startup from server/.env:
+//   - Cloudinary when CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET
+//     are all set. Photos are stored as https URLs; each upload's public_id is kept in the
+//     StoredImage collection so it can be deleted when replaced/removed.
+//   - Local disk (server/uploads, "/uploads/..." URLs) when none are set, in development
+//     only. In production (NODE_ENV=production) the server refuses to start instead,
+//     because most hosts wipe the local disk on restart/redeploy.
+// The credentials are only ever passed to the Cloudinary SDK, never logged or returned.
 const UPLOAD_ROOT = path.join(__dirname, "..", "..", "uploads");
 const EXT_BY_TYPE = { "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp" };
 const TYPE_ERROR = "Photo must be a JPEG, PNG or WebP image";
 const MB = 1024 * 1024;
+const CLOUDINARY_ENV = ["CLOUDINARY_CLOUD_NAME", "CLOUDINARY_API_KEY", "CLOUDINARY_API_SECRET"];
+const CLOUDINARY_ROOT = "artisan"; // assets go to artisan/products, artisan/avatars, artisan/migrated
 
-// One entry per kind of photo: folder, public URL prefix, size limit per file, and the
-// multipart field (with how many files it takes).
+// One entry per kind of photo: local folder and URL prefix, Cloudinary folder, size limit
+// per file, and the multipart field (with how many files it takes).
 const KINDS = {
-  product: { dir: path.join(UPLOAD_ROOT, "products"), prefix: "/uploads/products/", maxBytes: 2 * MB, field: "photos", maxFiles: 5 },
-  avatar: { dir: path.join(UPLOAD_ROOT, "avatars"), prefix: "/uploads/avatars/", maxBytes: 2 * MB, field: "photo", maxFiles: 1 },
+  product: { dir: path.join(UPLOAD_ROOT, "products"), prefix: "/uploads/products/", folder: `${CLOUDINARY_ROOT}/products`, maxBytes: 2 * MB, field: "photos", maxFiles: 5 },
+  avatar: { dir: path.join(UPLOAD_ROOT, "avatars"), prefix: "/uploads/avatars/", folder: `${CLOUDINARY_ROOT}/avatars`, maxBytes: 2 * MB, field: "photo", maxFiles: 1 },
 };
-for (const kind of Object.values(KINDS)) fs.mkdirSync(kind.dir, { recursive: true });
+
+function chooseStorage() {
+  const missing = CLOUDINARY_ENV.filter((name) => !process.env[name]?.trim());
+  if (missing.length === 0) return "cloudinary";
+  if (missing.length < CLOUDINARY_ENV.length) {
+    throw new Error(`Cloudinary is only partly configured: also set ${missing.join(", ")} in server/.env.`);
+  }
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(`Photo storage: set ${CLOUDINARY_ENV.join(", ")} in the server environment. Local disk storage is for development only.`);
+  }
+  return "local";
+}
+
+const STORAGE = chooseStorage();
+if (STORAGE === "cloudinary") {
+  cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME.trim(),
+    api_key: process.env.CLOUDINARY_API_KEY.trim(),
+    api_secret: process.env.CLOUDINARY_API_SECRET.trim(),
+    secure: true,
+  });
+} else {
+  for (const kind of Object.values(KINDS)) fs.mkdirSync(kind.dir, { recursive: true });
+}
 
 const badRequest = (message) => Object.assign(new Error(message), { status: 400 });
 
+// Cloudinary errors are turned into a plain Error with just the message and HTTP code, so
+// nothing from the SDK (request options, config) can end up in logs or responses.
+const cloudError = (action, err) => new Error(`Cloudinary ${action} failed: ${err?.message || "unknown error"}${err?.http_code ? ` (HTTP ${err.http_code})` : ""}`);
+
 // Express middleware for the kind's photo field (product: "photos", up to 5 files ->
-// req.files; avatar: "photo", 1 file -> req.file), held in memory: nothing is written to
-// disk until the rest of the request has been validated by the controller. Upload errors
+// req.files; avatar: "photo", 1 file -> req.file), held in memory: nothing is stored
+// until the rest of the request has been validated by the controller. Upload errors
 // become 400 responses with a clear message.
 function photoUpload(kindName) {
   const { maxBytes, field, maxFiles } = KINDS[kindName];
@@ -64,22 +101,66 @@ function sniffImageType(buf) {
   return null;
 }
 
-// Saves an uploaded photo under a random name and returns its public URL path.
+// Uploads a buffer to Cloudinary under folder/publicName and records it in StoredImage.
+// overwrite: false, so an existing asset with that id is reused, never replaced. Returns
+// the https URL.
+async function storeOnCloudinary(buffer, { folder, publicName, kind, source }) {
+  let result;
+  try {
+    result = await new Promise((resolve, reject) => {
+      cloudinary.uploader
+        .upload_stream(
+          { folder, public_id: publicName, resource_type: "image", overwrite: false, allowed_formats: ["jpg", "jpeg", "png", "webp"] },
+          (err, res) => (err ? reject(err) : resolve(res))
+        )
+        .end(buffer);
+    });
+  } catch (err) {
+    throw cloudError("upload", err);
+  }
+  try {
+    await StoredImage.updateOne(
+      { url: result.secure_url },
+      { $set: { publicId: result.public_id, kind }, ...(source && { $setOnInsert: { source } }) },
+      { upsert: true }
+    );
+  } catch (err) {
+    // Without a record it could never be deleted, so don't keep the asset either.
+    if (!source) await destroyOnCloudinary(result.public_id).catch(() => {});
+    throw err;
+  }
+  return result.secure_url;
+}
+
+async function destroyOnCloudinary(publicId) {
+  let result;
+  try {
+    result = await cloudinary.uploader.destroy(publicId, { resource_type: "image", invalidate: true });
+  } catch (err) {
+    throw cloudError("delete", err);
+  }
+  if (result?.result !== "ok" && result?.result !== "not found") throw new Error(`Cloudinary delete failed: ${result?.result || "no result"}`);
+}
+
+// Stores one validated photo and returns its URL (https on Cloudinary, "/uploads/..." on
+// local disk), under a random name.
 async function savePhoto(kindName, file) {
-  const { dir, prefix, maxBytes } = KINDS[kindName];
+  const { dir, prefix, folder, maxBytes } = KINDS[kindName];
   const type = sniffImageType(file?.buffer);
   if (!type) throw badRequest(TYPE_ERROR);
   if (file.buffer.length > maxBytes) throw badRequest(`Photo must be ${maxBytes / MB} MB or smaller`);
-  const name = crypto.randomBytes(16).toString("hex") + EXT_BY_TYPE[type];
-  await fs.promises.writeFile(path.join(dir, name), file.buffer, { flag: "wx" });
-  return prefix + name;
+  const name = crypto.randomBytes(16).toString("hex");
+  if (STORAGE === "cloudinary") return storeOnCloudinary(file.buffer, { folder, publicName: name, kind: kindName });
+  await fs.promises.writeFile(path.join(dir, name + EXT_BY_TYPE[type]), file.buffer, { flag: "wx" });
+  return prefix + name + EXT_BY_TYPE[type];
 }
 
 // Saves several photos (all checked first, so one bad file saves none) and returns their
-// URLs in the same order. If writing fails halfway, the files already written are removed.
+// URLs in the same order. If saving fails halfway, the photos already saved are removed.
 async function savePhotos(kindName, files = []) {
   for (const file of files) {
     if (!sniffImageType(file?.buffer)) throw badRequest(TYPE_ERROR);
+    if (file.buffer.length > KINDS[kindName].maxBytes) throw badRequest(`Each photo must be ${KINDS[kindName].maxBytes / MB} MB or smaller`);
   }
   const urls = [];
   try {
@@ -91,16 +172,32 @@ async function savePhotos(kindName, files = []) {
   return urls;
 }
 
-// Removes a photo previously returned by savePhoto for that kind (no-op for anything else,
-// e.g. seeded "/images/..." paths).
+// Removes a photo previously returned by savePhoto for that kind. No-op for anything else
+// (e.g. seeded "/images/..." paths, migrated static files, URLs from elsewhere). Local
+// "/uploads/..." files are removed in either mode, so photos from before the move to
+// Cloudinary are still cleaned up. Never throws: a failed delete is logged (asset id only)
+// and the record is kept so the asset can be found and removed later.
 async function deletePhoto(kindName, url) {
   const { dir, prefix } = KINDS[kindName];
-  if (typeof url !== "string" || !url.startsWith(prefix)) return;
-  await fs.promises.unlink(path.join(dir, path.basename(url))).catch(() => {});
+  if (typeof url !== "string") return;
+  if (url.startsWith(prefix)) {
+    await fs.promises.unlink(path.join(dir, path.basename(url))).catch(() => {});
+    return;
+  }
+  if (STORAGE !== "cloudinary" || !url.startsWith("https://")) return;
+  const record = await StoredImage.findOne({ url, kind: kindName });
+  if (!record) return;
+  try {
+    await destroyOnCloudinary(record.publicId);
+    await StoredImage.deleteOne({ _id: record._id });
+  } catch (err) {
+    console.warn(`Photo not deleted from Cloudinary (${record.publicId}): ${err.message}`);
+  }
 }
 
 module.exports = {
   UPLOAD_ROOT,
+  STORAGE,
   MAX_PRODUCT_PHOTOS: KINDS.product.maxFiles,
   productPhotoUpload: photoUpload("product"),
   saveProductPhotos: (files) => savePhotos("product", files),
@@ -108,4 +205,7 @@ module.exports = {
   avatarUpload: photoUpload("avatar"),
   saveAvatarPhoto: (file) => savePhoto("avatar", file),
   deleteAvatarPhoto: (url) => deletePhoto("avatar", url),
+  // For scripts/migrate-images-to-cloudinary.js only.
+  storeOnCloudinary,
+  sniffImageType,
 };

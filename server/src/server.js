@@ -3,7 +3,7 @@ const express = require("express");
 const cors = require("cors");
 const connectDB = require("./config/db");
 const securityHeaders = require("./middleware/securityHeaders");
-const { UPLOAD_ROOT } = require("./utils/imageStorage");
+const { UPLOAD_ROOT, STORAGE } = require("./utils/imageStorage");
 
 const authRoutes = require("./routes/authRoutes");
 const productRoutes = require("./routes/productRoutes");
@@ -40,7 +40,8 @@ app.use(cors({
 }));
 app.use(express.json({ limit: "100kb" }));
 
-// Uploaded product and profile photos (local-disk storage; see utils/imageStorage.js).
+// Photos on local disk (development storage, and older "/uploads/..." photos not yet moved
+// to Cloudinary; see utils/imageStorage.js and scripts/migrate-images-to-cloudinary.js).
 app.use("/uploads", express.static(UPLOAD_ROOT, {
   index: false,
   dotfiles: "deny",
@@ -78,7 +79,7 @@ const PORT = process.env.PORT || 5000;
 
 connectDB()
   .then(() => {
-    app.listen(PORT, () => console.log(`Artisan API listening on port ${PORT}`));
+    app.listen(PORT, () => console.log(`Artisan API listening on port ${PORT} (photo storage: ${STORAGE === "cloudinary" ? "Cloudinary" : "local disk, development only"})`));
   })
   .catch((err) => {
     console.error("Failed to connect to MongoDB:", err.message);
