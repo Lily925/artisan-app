@@ -20,7 +20,7 @@ export default function Nav({
     <header style={{ position:"sticky", top:0, zIndex:200, background:COLORS.card, borderBottom:`1px solid ${COLORS.border}` }}>
       <div className="a-container a-nav-row">
         <a
-          href="#"
+          href="/"
           onClick={(e) => { e.preventDefault(); navigate("home"); }}
           style={{ fontFamily:FONT_SERIF, fontSize:26, fontWeight:700, color:COLORS.ink, textDecoration:"none", flexShrink:0 }}
         >

@@ -17,7 +17,7 @@ export default function ProductCard({
   return (
     <div className="a-product-card">
       <div style={{ position:"relative", paddingBottom:"100%", background:COLORS.bgSoft }}>
-        <a href="#" className="a-card-link" aria-label={fullTitle} onClick={openCard}>
+        <a href="/" className="a-card-link" aria-label={fullTitle} onClick={openCard}>
           <ProductImage src={product.images?.[0]} alt={fullTitle} />
         </a>
         <button
@@ -33,7 +33,7 @@ export default function ProductCard({
         {product.artisan?.certified && <span className="a-badge-certified">✓ {certifiedLabel}</span>}
       </div>
 
-      <a href="#" className="a-card-link" onClick={openCard} style={{ padding:"14px 14px 16px", display:"flex", flexDirection:"column", gap:4, flex:1 }}>
+      <a href="/" className="a-card-link" onClick={openCard} style={{ padding:"14px 14px 16px", display:"flex", flexDirection:"column", gap:4, flex:1 }}>
         <span style={{ fontFamily:FONT_SERIF, fontSize:17, fontWeight:600, color:COLORS.ink, lineHeight:1.3 }}>{primaryName}</span>
         {secondaryName !== primaryName && (
           <span style={{ fontFamily:FONT_SANS, fontSize:12, color:COLORS.inkSoft, fontStyle:"italic" }}>{secondaryName}</span>

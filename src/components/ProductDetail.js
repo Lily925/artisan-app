@@ -42,7 +42,7 @@ export default function ProductDetail({ lang, t, selected, savedItems, toggleSav
     <div style={{ background:COLORS.bg, minHeight:"100vh" }}>
       <div className="a-page">
         <div className="a-breadcrumb">
-          <a href="#" onClick={(e) => { e.preventDefault(); navigate("shop"); }}>{d.breadcrumbShop}</a>
+          <a href="/" onClick={(e) => { e.preventDefault(); navigate("shop"); }}>{d.breadcrumbShop}</a>
           {" / "}{categoryLabel}{" / "}
           <span style={{ color:COLORS.ink }}>{primaryName}</span>
         </div>
@@ -169,7 +169,7 @@ export default function ProductDetail({ lang, t, selected, savedItems, toggleSav
               <div style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:700, color:COLORS.ink, marginBottom:4 }}>{d.customCalloutTitle}</div>
               <div style={{ fontFamily:FONT_SANS, fontSize:12, color:COLORS.inkSoft, lineHeight:1.5, marginBottom:8 }}>{d.customCalloutBody}</div>
               <a
-                href="#"
+                href="/"
                 onClick={(e) => { e.preventDefault(); navigate("commission"); }}
                 style={{ fontFamily:FONT_SANS, fontSize:12, fontWeight:700, color:COLORS.accentDark, textDecoration:"none" }}
               >

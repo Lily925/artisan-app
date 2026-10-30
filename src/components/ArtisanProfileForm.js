@@ -59,7 +59,7 @@ export default function ArtisanProfileForm({ t, navigate, onSaved, onApiError })
   };
 
   const back = (
-    <a href="#" onClick={(e) => { e.preventDefault(); navigate("profile"); }}
+    <a href="/" onClick={(e) => { e.preventDefault(); navigate("profile"); }}
       style={{ fontFamily:FONT_SANS, fontSize:13, color:COLORS.inkSoft, textDecoration:"none" }}>
       ‹ {s.back}
     </a>

@@ -5,7 +5,7 @@ export default function Footer({ t, navigate }) {
 
   const link = (label, page) => (
     <a
-      href="#"
+      href="/"
       onClick={(e) => { e.preventDefault(); navigate(page); }}
       style={{ display:"block", fontFamily:FONT_SANS, fontSize:13, padding:"4px 0" }}
     >
