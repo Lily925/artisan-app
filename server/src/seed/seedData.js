@@ -1,5 +1,7 @@
-// Mirrors the frontend's mock data (src/data.js in the React app) so the API
-// has something real to test against. Password for every seeded account is "artisan123".
+// Starting data for `npm run seed` (add-only, see seed.js). Password for every seeded
+// account is "artisan123". The demo artisans (Narantsetseg, Enkhjargal, ...) are accounts
+// only: their emoji placeholder products were removed on 2026-10-15 and must not come back.
+// Every seeded product needs a real photo (seed.js skips any without one).
 
 const users = [
   { name: "Admin", email: "admin@artisan.mn", password: "artisan123", role: "admin" },
@@ -36,16 +38,6 @@ const artisanProfiles = {
 // price is the "basic" tier price in USD; story/patron are derived from it
 // by pricingTiersFor (src/utils/pricing.js: +30% / +65%).
 const products = [
-  { title:"Гар хийцийн зүүлт", titleEn:"Handmade Jewelry Set", artisanEmail:"narantsetseg@artisan.mn", category:"jewelry", price:42 },
-  { title:"Цэцэгт аяга", titleEn:"Handmade Floral Mug", artisanEmail:"enkhjargal@artisan.mn", category:"ceramics", price:28 },
-  { title:"Өнгийн зурвас", titleEn:"Rainbow Dotholidy", artisanEmail:"boldbaatar@artisan.mn", category:"art", price:32.5 },
-  { title:"Гар хийцийн хивс", titleEn:"Handmades Terlocks Set", artisanEmail:"oyuntsetseg@artisan.mn", category:"textile", price:18 },
-  // frontend mock priced this one in KRW (₩89,000); seeded here as a plain USD price instead.
-  { title:"Уламжлалт эсгий хүүхэлдэй", titleEn:"Traditional Felt Doll", artisanEmail:"gantulga@artisan.mn", category:"crafts", price:65 },
-  { title:"Гар хийцийн зүү", titleEn:"Reaction Brooch", artisanEmail:"tserenpuntsag@artisan.mn", category:"textile", price:22 },
-  { title:"Уламжлалт эсгий цүнх", titleEn:"Traditional Felt Wallet", artisanEmail:"narantsetseg@artisan.mn", category:"leather", price:55 },
-  { title:"Монгол модон баримал", titleEn:"Mongolian Wood Carving", artisanEmail:"boldbaatar@artisan.mn", category:"wood", price:64 },
-
   // ── Real noon_handmade_ products ──
   // Shop prices are in ₮; converted to USD at the live rate when added, rounded to cents.
   // 79,000₮ / 3,578.01 (open.er-api.com, 2026-09-29) = $22.08

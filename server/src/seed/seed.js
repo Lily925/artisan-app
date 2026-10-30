@@ -1,3 +1,11 @@
+// `npm run seed`: ADD-ONLY starting data. Safe to run on a live database:
+//   - never deletes or overwrites anything (users, artisans, products, orders, carts);
+//   - creates seeded accounts that don't exist yet (existing ones keep their password and data);
+//   - creates an artisan profile only for a seeded account that has none;
+//   - creates seeded products only for artisans it created in this same run, so on an
+//     existing database nothing reappears (not even a product deleted on purpose);
+//   - never creates a product without a photo (no emoji placeholders).
+// Fake dashboard data is separate and DEMO-ONLY: `npm run seed:demo` (see demo.js).
 require("dotenv").config();
 const bcrypt = require("bcryptjs");
 const mongoose = require("mongoose");
@@ -7,36 +15,37 @@ const Artisan = require("../models/Artisan");
 const Product = require("../models/Product");
 const { users, artisanProfiles, products } = require("./seedData");
 const { pricingTiersFor } = require("../utils/pricing");
-const { addDemoData, removeDemoData } = require("./demo");
 
 async function run() {
   await connectDB();
+  const created = { users: 0, artisans: 0, products: 0 };
 
-  // Demo orders/views point at the users and products about to be wiped; clear them first.
-  await removeDemoData();
-
-  console.log("Clearing existing Users, Artisans, and Products...");
-  await Promise.all([User.deleteMany({}), Artisan.deleteMany({}), Product.deleteMany({})]);
-
-  console.log("Creating users...");
   const userByEmail = {};
   for (const u of users) {
-    const passwordHash = await bcrypt.hash(u.password, 10);
-    const user = await User.create({ name: u.name, email: u.email, passwordHash, role: u.role });
+    let user = await User.findOne({ email: u.email });
+    if (!user) {
+      const passwordHash = await bcrypt.hash(u.password, 10);
+      user = await User.create({ name: u.name, email: u.email, passwordHash, role: u.role });
+      created.users++;
+    }
     userByEmail[u.email] = user;
   }
 
-  console.log("Creating artisan profiles...");
-  const artisanByEmail = {};
+  const newArtisanByEmail = {};
   for (const [email, profile] of Object.entries(artisanProfiles)) {
     const user = userByEmail[email];
-    const artisan = await Artisan.create({ user: user._id, certified: true, ...profile });
-    artisanByEmail[email] = artisan;
+    if (!user || (await Artisan.exists({ user: user._id }))) continue;
+    newArtisanByEmail[email] = await Artisan.create({ user: user._id, certified: true, ...profile });
+    created.artisans++;
   }
 
-  console.log("Creating products...");
   for (const p of products) {
-    const artisan = artisanByEmail[p.artisanEmail];
+    const artisan = newArtisanByEmail[p.artisanEmail];
+    if (!artisan) continue; // existing shop: its products are its own business
+    if (!p.images?.length) {
+      console.warn(`Skipped "${p.titleEn}": seeded products need a real photo.`);
+      continue;
+    }
     await Product.create({
       title: p.title,
       titleEn: p.titleEn,
@@ -44,14 +53,12 @@ async function run() {
       artisan: artisan._id,
       pricingTiers: pricingTiersFor(p.price),
       description: p.description || "",
-      images: p.images || [],
+      images: p.images,
     });
+    created.products++;
   }
 
-  // DEMO DATA (fake orders/views for the dashboard), see demoData.js.
-  await addDemoData();
-
-  console.log(`Seeded ${users.length} users, ${Object.keys(artisanProfiles).length} artisans, ${products.length} products.`);
+  console.log(`Seed (add-only): created ${created.users} users, ${created.artisans} artisan profiles, ${created.products} products. Nothing was deleted or changed.`);
   await mongoose.disconnect();
 }
 

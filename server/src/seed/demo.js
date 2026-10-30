@@ -1,4 +1,5 @@
-// Adds or removes the DEMO dashboard data described in demoData.js.
+// DEMO-ONLY (optional, never run by `npm run seed`): fake buyers, orders and views for the
+// noon_handmade_ dashboard, described in demoData.js. Remove it before real use.
 //   node src/seed/demo.js            add (replaces any earlier demo data)
 //   node src/seed/demo.js --remove   remove
 // Touches only demo records; real users, products and orders are left alone.
