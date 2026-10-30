@@ -15,16 +15,23 @@ const str = (v) => (typeof v === "string" ? v : null);
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PASSWORD_MIN = 8;
 const PASSWORD_MAX = 128; // bcrypt only uses the first 72 bytes; this also bounds hashing work
+// The only roles a client may pick when signing up. "admin" (or anything else, including
+// non-strings) is refused; admins are created on the server only (seed / database).
+const SIGNUP_ROLES = ["buyer", "artisan"];
 
+// Login/signup response: the caller's own account (so it includes email).
 function toPublicUser(user) {
-  return { id: user._id, name: user.name, email: user.email, role: user.role };
+  return { id: user._id, name: user.name, email: user.email, role: user.role, avatarUrl: user.avatarUrl || "", bio: user.bio || "" };
 }
 
 async function signup(req, res) {
   const name = str(req.body?.name)?.trim();
   const email = str(req.body?.email)?.trim().toLowerCase();
   const password = str(req.body?.password);
-  const { role } = req.body || {};
+  const role = req.body?.role === undefined ? "buyer" : req.body.role;
+  if (!SIGNUP_ROLES.includes(role)) {
+    return res.status(400).json({ error: "role must be 'buyer' or 'artisan'", code: "BAD_ROLE" });
+  }
   if (!name || !email || !password) {
     return res.status(400).json({ error: "name, email, and password are required" });
   }
@@ -33,15 +40,13 @@ async function signup(req, res) {
   if (password.length < PASSWORD_MIN || password.length > PASSWORD_MAX) {
     return res.status(400).json({ error: `Password must be ${PASSWORD_MIN}-${PASSWORD_MAX} characters` });
   }
-  if (role !== undefined && !["buyer", "artisan"].includes(role)) {
-    return res.status(400).json({ error: "role must be 'buyer' or 'artisan'" });
-  }
 
   const existing = await User.findOne({ email });
   if (existing) return res.status(409).json({ error: "Email already registered" });
 
   const passwordHash = await bcrypt.hash(password, 10);
-  const user = await User.create({ name, email, passwordHash, role: role || "buyer" });
+  // An artisan's shop profile (Artisan record) is created by POST /api/artisans/me ("Set up your shop").
+  const user = await User.create({ name, email, passwordHash, role });
 
   const token = signToken(user);
   res.status(201).json({ token, user: toPublicUser(user) });

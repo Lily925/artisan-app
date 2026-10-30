@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const Commission = require("../models/Commission");
 const Artisan = require("../models/Artisan");
+const { ARTISAN_USER_PUBLIC } = require("../config/constants");
 
 // Keys match the frontend's productCategories list (same as productController).
 const CATEGORIES = ["jewelry", "ceramics", "art", "textile", "crafts", "leather", "wood"];
@@ -9,11 +10,11 @@ const MAX_DESCRIPTION = 2000;
 const MAX_BID_MESSAGE = 1000;
 const text = (v) => (typeof v === "string" ? v.trim() : "");
 
-// Bidders are shown by shop/name only — never email (contact is Instagram-only).
+// Bidders (artisans) are shown by shop/name/photo only — never email (contact is Instagram-only).
 const BID_ARTISAN_POPULATE = {
   path: "bids.artisan",
   select: "shopName specialty certified photoUrl instagramHandle user",
-  populate: { path: "user", select: "name" },
+  populate: { path: "user", select: ARTISAN_USER_PUBLIC },
 };
 
 async function createCommission(req, res) {

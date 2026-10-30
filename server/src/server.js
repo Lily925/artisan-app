@@ -12,6 +12,7 @@ const cartRoutes = require("./routes/cartRoutes");
 const orderRoutes = require("./routes/orderRoutes");
 const commissionRoutes = require("./routes/commissionRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
+const userRoutes = require("./routes/userRoutes");
 
 // Refuse to start with a missing or guessable JWT secret: anyone who knows it can sign
 // tokens for any account. (The value itself is never printed.)
@@ -34,12 +35,12 @@ const allowedOrigins = (process.env.CORS_ORIGINS || "http://localhost:3000").spl
 app.use(cors({
   origin: (origin, cb) => cb(null, !origin || allowedOrigins.includes(origin)),
   allowedHeaders: ["Content-Type", "Authorization", "X-Viewer-Session"],
-  methods: ["GET", "POST", "PUT", "DELETE"],
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
   maxAge: 600,
 }));
 app.use(express.json({ limit: "100kb" }));
 
-// Uploaded product photos (local-disk storage; see utils/imageStorage.js).
+// Uploaded product and profile photos (local-disk storage; see utils/imageStorage.js).
 app.use("/uploads", express.static(UPLOAD_ROOT, {
   index: false,
   dotfiles: "deny",
@@ -54,6 +55,7 @@ app.use("/api/cart", cartRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/commissions", commissionRoutes);
 app.use("/api/payments", paymentRoutes);
+app.use("/api/users", userRoutes);
 
 app.use((req, res) => res.status(404).json({ error: "Not found" }));
 
