@@ -15,7 +15,7 @@ export default function Footer({ t, navigate }) {
 
   return (
     <footer className="a-footer">
-      <div style={{ maxWidth:1200, margin:"0 auto", padding:"48px 24px", display:"flex", flexWrap:"wrap", justifyContent:"space-between", gap:32 }}>
+      <div className="a-container" style={{ paddingTop:48, paddingBottom:48, display:"flex", flexWrap:"wrap", justifyContent:"space-between", gap:32 }}>
         <div style={{ fontFamily:FONT_SERIF, fontSize:24, fontWeight:700, color:COLORS.card }}>Artisan</div>
         <div style={{ display:"flex", gap:64, flexWrap:"wrap" }}>
           <div>
@@ -30,8 +30,10 @@ export default function Footer({ t, navigate }) {
           </div>
         </div>
       </div>
-      <div style={{ borderTop:"1px solid rgba(255,255,255,0.12)", padding:"16px 24px", textAlign:"center", fontFamily:FONT_SANS, fontSize:11, opacity:0.6 }}>
-        {shop.copyright}
+      <div style={{ borderTop:"1px solid rgba(255,255,255,0.12)" }}>
+        <div className="a-container" style={{ paddingTop:16, paddingBottom:16, textAlign:"center", fontFamily:FONT_SANS, fontSize:11, opacity:0.6 }}>
+          {shop.copyright}
+        </div>
       </div>
     </footer>
   );

@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
-import { COLORS, THEME_CSS } from "./theme";
+import { COLORS, FONT_SERIF, FONT_SANS, THEME_CSS } from "./theme";
 import { i18n } from "./data";
-import { placeholderEmoji } from "./placeholders";
-import { api, setToken, getToken, ApiError, assetUrl } from "./api";
+import { api, setToken, getToken, ApiError } from "./api";
 import Nav from "./components/Nav";
 import Home from "./components/Home";
 import Shop from "./components/Shop";
@@ -16,8 +15,21 @@ import OrderDetail from "./components/OrderDetail";
 import ShopOrders from "./components/ShopOrders";
 import ArtisanProfileForm from "./components/ArtisanProfileForm";
 import AddProductForm from "./components/AddProductForm";
-import Storefront from "./components/Storefront";
-import ArtisanProfile from "./components/ArtisanProfile";
+import Portfolio from "./components/Portfolio";
+import ProfilePage from "./components/ProfilePage";
+import ShopSetup from "./components/ShopSetup";
+import ProductCard from "./components/ProductCard";
+
+// One switcher sets both: the UI language and the display currency that goes with it.
+// Money is always USD on the server; other currencies are a display-only conversion.
+const CURRENCY_BY_LANG = { en: "USD", mn: "MNT", ko: "KRW" };
+const LOCALE_KEY = "artisan-lang";
+function savedLang() {
+  try {
+    const v = localStorage.getItem(LOCALE_KEY);
+    return Object.hasOwn(CURRENCY_BY_LANG, v) ? v : "en"; // anything unknown/old → English
+  } catch { return "en"; }
+}
 
 const AVATAR_BY_ROLE = { admin: "🧑‍💼", artisan: "👩‍🎨", buyer: "🛍" };
 const DEMO_ACCOUNTS = [
@@ -34,12 +46,13 @@ function LoginPage({ onLogin, onRegister, lang }) {
   const [error, setError] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [accountType, setAccountType] = useState("buyer"); // register: "buyer" | "artisan"
 
   const lbl = lang==="mn"
-    ? { login:"Нэвтрэх", register:"Бүртгүүлэх", email:"Имэйл", pw:"Нууц үг", name:"Нэр", loginBtn:"Нэвтрэх", registerBtn:"Бүртгүүлэх", noAcc:"Бүртгэл байхгүй юу?", hasAcc:"Бүртгэл байна уу?", wrongPw:"Имэйл эсвэл нууц үг буруу", demo:"Туршилтаар нэвтрэх:", appSub:"Монгол гар урлалын зах зээл", fillAll:"Бүх талбарыг бөглөнө үү" }
+    ? { login:"Нэвтрэх", register:"Бүртгүүлэх", email:"Имэйл", pw:"Нууц үг", name:"Нэр", loginBtn:"Нэвтрэх", registerBtn:"Бүртгүүлэх", noAcc:"Бүртгэл байхгүй юу?", hasAcc:"Бүртгэл байна уу?", wrongPw:"Имэйл эсвэл нууц үг буруу", demo:"Туршилтаар нэвтрэх:", appSub:"Монгол гар урлалын зах зээл", fillAll:"Бүх талбарыг бөглөнө үү", accountType:"Бүртгэлийн төрөл", buyerTitle:"Би худалдан авна", buyerSub:"Гар урлалын бүтээл худалдан авч, тусгай захиалга өгнө.", artisanTitle:"Би гар урлалын бүтээлээ зарна", artisanNote:"Урчны бүртгэлээр бүтээгдэхүүн нэмэх, захиалгаа удирдах, борлуулалтын самбараа харах боломжтой. Бүртгүүлсний дараа дэлгүүрээ тохируулна." }
     : lang==="ko"
-    ? { login:"로그인", register:"회원가입", email:"이메일", pw:"비밀번호", name:"이름", loginBtn:"로그인", registerBtn:"회원가입", noAcc:"계정이 없으신가요?", hasAcc:"이미 계정이 있으신가요?", wrongPw:"이메일 또는 비밀번호가 틀렸습니다", demo:"데모 로그인:", appSub:"몽골 전통 공예 마켓", fillAll:"모든 항목을 입력해주세요" }
-    : { login:"Login", register:"Register", email:"Email", pw:"Password", name:"Name", loginBtn:"Login", registerBtn:"Create Account", noAcc:"Don't have an account?", hasAcc:"Already have an account?", wrongPw:"Incorrect email or password", demo:"Demo login:", appSub:"Mongolian Handmade Marketplace", fillAll:"Please fill all fields" };
+    ? { login:"로그인", register:"회원가입", email:"이메일", pw:"비밀번호", name:"이름", loginBtn:"로그인", registerBtn:"회원가입", noAcc:"계정이 없으신가요?", hasAcc:"이미 계정이 있으신가요?", wrongPw:"이메일 또는 비밀번호가 틀렸습니다", demo:"데모 로그인:", appSub:"몽골 전통 공예 마켓", fillAll:"모든 항목을 입력해주세요", accountType:"계정 유형", buyerTitle:"구매하고 싶어요", buyerSub:"핸드메이드 작품을 구매하고 맞춤 주문을 할 수 있어요.", artisanTitle:"내 핸드메이드 작품을 판매하고 싶어요", artisanNote:"장인 계정으로 상품 등록, 주문 관리, 판매 대시보드를 이용할 수 있어요. 가입 후 바로 상점을 설정해요." }
+    : { login:"Login", register:"Register", email:"Email", pw:"Password", name:"Name", loginBtn:"Login", registerBtn:"Create Account", noAcc:"Don't have an account?", hasAcc:"Already have an account?", wrongPw:"Incorrect email or password", demo:"Demo login:", appSub:"Mongolian Handmade Marketplace", fillAll:"Please fill all fields", accountType:"Account type", buyerTitle:"I want to buy", buyerSub:"Shop handmade pieces and order custom work.", artisanTitle:"I want to sell my handmade products", artisanNote:"An artisan account lets you add products, manage orders and see your sales dashboard. You'll set up your shop right after signing up." };
 
   const handleLogin = async (loginEmail = email, loginPassword = password) => {
     if (!loginEmail || !loginPassword) { setError(lbl.fillAll); return; }
@@ -57,7 +70,7 @@ function LoginPage({ onLogin, onRegister, lang }) {
     if (!name || !email || !password) { setError(lbl.fillAll); return; }
     setBusy(true); setError("");
     try {
-      await onRegister(name, email, password);
+      await onRegister(name, email, password, accountType);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : lbl.wrongPw);
     } finally {
@@ -65,76 +78,107 @@ function LoginPage({ onLogin, onRegister, lang }) {
     }
   };
 
+  const submitOnEnter = (e) => e.key==="Enter" && (tab==="login" ? handleLogin() : handleRegister());
+
+  // Full-width page (the shared .a-page container); the form itself stays ~560px, centered.
   return (
-    <div style={{ minHeight:"100vh", background:"linear-gradient(160deg,#fdf6ee 0%,#f5ede0 100%)", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"20px", fontFamily:"'Helvetica Neue',Arial,sans-serif" }}>
+    <div style={{ minHeight:"100vh", background:COLORS.bg, color:COLORS.ink, fontFamily:FONT_SANS }}>
+      <style>{`*{box-sizing:border-box;margin:0;padding:0;} input,button{font-family:inherit;}`}</style>
+      <style>{THEME_CSS}</style>
       <style>{`
         @keyframes loginFade { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
-        .login-card { animation: loginFade 0.35s ease forwards; }
-        .login-input { width:100%; border:1.5px solid #e8e2da; border-radius:10px; padding:11px 14px; font-size:14px; outline:none; box-sizing:border-box; background:#faf8f5; transition:border-color 0.2s, box-shadow 0.2s; font-family:inherit; }
-        .login-input:focus { border-color:#e05d26; box-shadow:0 0 0 3px rgba(224,93,38,0.1); background:white; }
-        .demo-btn { display:flex; align-items:center; gap:10px; width:100%; background:#faf8f5; border:1px solid #ede8e0; border-radius:10px; padding:10px 14px; margin-bottom:8px; cursor:pointer; text-align:left; box-sizing:border-box; transition:all 0.15s; }
-        .demo-btn:hover { background:#fff4ee; border-color:#e05d26; transform:translateX(2px); }
+        .login-card { animation: loginFade 0.35s ease forwards; width:100%; max-width:560px; margin:0 auto; }
+        .demo-btn { display:flex; align-items:center; gap:12px; width:100%; background:${COLORS.card}; border:1px solid ${COLORS.border}; border-radius:2px; padding:10px 14px; margin-bottom:8px; cursor:pointer; text-align:left; min-height:44px; transition:all 0.15s; }
+        .demo-btn:hover { background:${COLORS.bgSoft}; border-color:${COLORS.accentDark}; }
+        .acct-card { display:flex; gap:12px; align-items:flex-start; width:100%; text-align:left; background:${COLORS.card}; border:1.5px solid ${COLORS.border}; border-radius:2px; padding:14px 16px; cursor:pointer; min-height:44px; transition:border-color 0.15s, background 0.15s, box-shadow 0.15s; }
+        .acct-card:hover { border-color:${COLORS.accentDark}; }
+        .acct-card[aria-checked="true"] { border-color:${COLORS.accentDark}; background:${COLORS.bgSoft}; box-shadow:0 0 0 1px ${COLORS.accentDark}; }
+        .acct-card:focus-visible { outline:2px solid ${COLORS.accentDark}; outline-offset:2px; }
       `}</style>
-      <div className="login-card" style={{ width:"100%", maxWidth:390 }}>
+      <div className="a-page" style={{ minHeight:"100vh", display:"flex", alignItems:"center" }}>
+      <div className="login-card">
         <div style={{ textAlign:"center", marginBottom:28 }}>
-          <div style={{ fontFamily:"Georgia,serif", fontSize:40, fontWeight:700, color:"#e05d26", letterSpacing:-1 }}>artisan</div>
-          <div style={{ fontSize:11, color:"#c4a882", letterSpacing:2.5, textTransform:"uppercase", marginTop:4 }}>{lbl.appSub}</div>
+          <div style={{ fontFamily:FONT_SERIF, fontSize:44, fontWeight:700, color:COLORS.ink, letterSpacing:-0.5 }}>Artisan</div>
+          <div style={{ fontSize:11, color:COLORS.accentDark, letterSpacing:2.5, textTransform:"uppercase", marginTop:4, fontWeight:700 }}>{lbl.appSub}</div>
         </div>
 
-        <div style={{ background:"white", borderRadius:20, padding:"28px 24px", boxShadow:"0 8px 40px rgba(0,0,0,0.08)", marginBottom:14 }}>
-          <div style={{ display:"flex", background:"#f5f2ee", borderRadius:12, padding:3, marginBottom:22 }}>
+        <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:2, padding:"28px 24px", boxShadow:"0 8px 32px rgba(59,42,50,0.08)", marginBottom:14 }}>
+          <div role="tablist" style={{ display:"flex", background:COLORS.bgSoft, border:`1px solid ${COLORS.border}`, borderRadius:2, padding:3, marginBottom:22 }}>
             {["login","register"].map(tb => (
-              <button key={tb} onClick={() => { setTab(tb); setError(""); }} style={{ flex:1, padding:"9px 0", border:"none", borderRadius:10, fontWeight:600, fontSize:14, cursor:"pointer", background:tab===tb?"white":"transparent", color:tab===tb?"#e05d26":"#999", boxShadow:tab===tb?"0 2px 8px rgba(0,0,0,0.08)":"none", transition:"all 0.2s" }}>
+              <button key={tb} type="button" role="tab" aria-selected={tab===tb} onClick={() => { setTab(tb); setError(""); }} style={{ flex:1, padding:"10px 0", minHeight:44, border:"none", borderRadius:2, fontWeight:700, fontSize:14, cursor:"pointer", background:tab===tb?COLORS.card:"transparent", color:tab===tb?COLORS.accentDark:COLORS.inkSoft, boxShadow:tab===tb?"0 2px 8px rgba(59,42,50,0.08)":"none", transition:"all 0.2s" }}>
                 {tb==="login"?lbl.login:lbl.register}
               </button>
             ))}
           </div>
 
           {tab==="register" && (
-            <div style={{ marginBottom:14 }}>
-              <label style={{ fontSize:12, color:"#aaa", display:"block", marginBottom:5, fontWeight:500 }}>{lbl.name}</label>
-              <input className="login-input" value={name} onChange={e=>setName(e.target.value)} placeholder="Narantsetseg" />
+            <div role="radiogroup" aria-label={lbl.accountType} style={{ display:"grid", gap:10, marginBottom:20 }}
+              onKeyDown={(e) => {
+                if (!["ArrowDown","ArrowUp","ArrowLeft","ArrowRight"].includes(e.key)) return;
+                e.preventDefault();
+                const next = accountType === "buyer" ? "artisan" : "buyer";
+                setAccountType(next);
+                e.currentTarget.querySelector(`[data-type="${next}"]`)?.focus();
+              }}>
+              {[["buyer", "🛍", lbl.buyerTitle, lbl.buyerSub], ["artisan", "🧶", lbl.artisanTitle, lbl.artisanNote]].map(([key, icon, title, sub]) => (
+                <button key={key} type="button" role="radio" data-type={key} className="acct-card" aria-checked={accountType===key} tabIndex={accountType===key ? 0 : -1}
+                  onClick={() => setAccountType(key)}>
+                  <span className={`a-radio-dot${accountType===key ? " on" : ""}`} aria-hidden="true" style={{ marginTop:2 }} />
+                  <span style={{ minWidth:0 }}>
+                    <span style={{ display:"block", fontSize:15, fontWeight:700, color:COLORS.ink }}><span aria-hidden="true">{icon} </span>{title}</span>
+                    <span style={{ display:"block", fontSize:12, color:COLORS.inkSoft, lineHeight:1.5, marginTop:4 }}>{sub}</span>
+                  </span>
+                </button>
+              ))}
             </div>
           )}
-          <div style={{ marginBottom:14 }}>
-            <label style={{ fontSize:12, color:"#aaa", display:"block", marginBottom:5, fontWeight:500 }}>{lbl.email}</label>
-            <input className="login-input" value={email} onChange={e=>setEmail(e.target.value)} type="email" placeholder="you@example.com" onKeyDown={e=>e.key==="Enter"&&(tab==="login"?handleLogin():handleRegister())} />
+          {tab==="register" && (
+            <div style={{ marginBottom:16 }}>
+              <label className="a-label" htmlFor="login-name">{lbl.name}</label>
+              <input id="login-name" className="a-input" value={name} onChange={e=>setName(e.target.value)} placeholder="Narantsetseg" />
+            </div>
+          )}
+          <div style={{ marginBottom:16 }}>
+            <label className="a-label" htmlFor="login-email">{lbl.email}</label>
+            <input id="login-email" className="a-input" value={email} onChange={e=>setEmail(e.target.value)} type="email" placeholder="you@example.com" onKeyDown={submitOnEnter} />
           </div>
-          <div style={{ marginBottom:20, position:"relative" }}>
-            <label style={{ fontSize:12, color:"#aaa", display:"block", marginBottom:5, fontWeight:500 }}>{lbl.pw}</label>
-            <input className="login-input" value={password} onChange={e=>setPassword(e.target.value)} type={showPw?"text":"password"} placeholder="••••••••" style={{ paddingRight:42 }} onKeyDown={e=>e.key==="Enter"&&(tab==="login"?handleLogin():handleRegister())} />
-            <button onClick={()=>setShowPw(!showPw)} style={{ position:"absolute", right:12, top:30, background:"none", border:"none", cursor:"pointer", fontSize:15, color:"#bbb" }}>{showPw?"🙈":"👁"}</button>
+          <div style={{ marginBottom:20 }}>
+            <label className="a-label" htmlFor="login-password">{lbl.pw}</label>
+            <div style={{ position:"relative" }}>
+              <input id="login-password" className="a-input" value={password} onChange={e=>setPassword(e.target.value)} type={showPw?"text":"password"} placeholder="••••••••" style={{ paddingRight:48 }} onKeyDown={submitOnEnter} />
+              <button type="button" aria-pressed={showPw} onClick={()=>setShowPw(!showPw)} style={{ position:"absolute", right:2, top:"50%", transform:"translateY(-50%)", width:44, height:40, background:"none", border:"none", cursor:"pointer", fontSize:15, color:COLORS.inkSoft }}>{showPw?"🙈":"👁"}</button>
+            </div>
           </div>
 
-          {error && <div style={{ background:"#fff0ef", border:"1px solid #ffc5c0", borderRadius:10, padding:"9px 14px", fontSize:12, color:"#c0392b", marginBottom:14, display:"flex", alignItems:"center", gap:6 }}>⚠️ {error}</div>}
+          {error && <div role="alert" style={{ background:COLORS.bgSoft, border:`1px solid ${COLORS.accentSoft}`, borderRadius:2, padding:"9px 14px", fontSize:13, color:COLORS.accentDark, fontWeight:600, marginBottom:14, display:"flex", alignItems:"center", gap:6 }}>⚠️ {error}</div>}
 
-          <button disabled={busy} onClick={tab==="login"?()=>handleLogin():handleRegister} style={{ width:"100%", background:"linear-gradient(135deg,#e05d26,#c94f1e)", color:"white", border:"none", borderRadius:26, padding:"13px 0", fontSize:15, fontWeight:700, cursor:busy?"default":"pointer", opacity:busy?0.7:1, boxShadow:"0 4px 14px rgba(224,93,38,0.35)", transition:"transform 0.1s, box-shadow 0.15s" }}>
+          <button type="button" className="a-btn-primary" disabled={busy} onClick={tab==="login"?()=>handleLogin():handleRegister} style={{ width:"100%", fontSize:15, cursor:busy?"default":"pointer", opacity:busy?0.7:1 }}>
             {busy ? "…" : (tab==="login"?lbl.loginBtn:lbl.registerBtn)}
           </button>
-          <div style={{ textAlign:"center", marginTop:16, fontSize:13, color:"#aaa" }}>
+          <div style={{ textAlign:"center", marginTop:16, fontSize:13, color:COLORS.inkSoft }}>
             {tab==="login"?lbl.noAcc:lbl.hasAcc}{" "}
-            <span onClick={()=>setTab(tab==="login"?"register":"login")} style={{ color:"#e05d26", cursor:"pointer", fontWeight:600 }}>{tab==="login"?lbl.register:lbl.login}</span>
+            <button type="button" className="a-shop-link" onClick={()=>setTab(tab==="login"?"register":"login")} style={{ display:"inline", color:COLORS.accentDark, fontWeight:700, fontSize:13 }}>{tab==="login"?lbl.register:lbl.login}</button>
           </div>
         </div>
 
-        <div style={{ background:"white", borderRadius:16, padding:"16px 18px", border:"1px solid #ede8e0", boxShadow:"0 2px 12px rgba(0,0,0,0.04)" }}>
-          <div style={{ fontSize:10, color:"#ccc", textTransform:"uppercase", letterSpacing:1.5, marginBottom:10, fontWeight:600 }}>{lbl.demo}</div>
+        <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:2, padding:"16px 18px" }}>
+          <div style={{ fontSize:11, color:COLORS.inkSoft, textTransform:"uppercase", letterSpacing:1.5, marginBottom:10, fontWeight:700 }}>{lbl.demo}</div>
           {DEMO_ACCOUNTS.map(u => (
-            <button key={u.email} className="demo-btn" disabled={busy} onClick={() => handleLogin(u.email, u.password)}>
+            <button key={u.email} type="button" className="demo-btn" disabled={busy} onClick={() => handleLogin(u.email, u.password)}>
               <span style={{ fontSize:22 }}>{AVATAR_BY_ROLE[u.email.startsWith("admin")?"admin":u.email.startsWith("narantsetseg")?"artisan":"buyer"]}</span>
-              <div style={{ flex:1 }}>
-                <div style={{ fontSize:13, fontWeight:600, color:"#222" }}>{u.name}</div>
-                <div style={{ fontSize:11, color:"#bbb" }}>{u.email}</div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:13, fontWeight:700, color:COLORS.ink }}>{u.name}</div>
+                <div style={{ fontSize:12, color:COLORS.inkSoft, overflowWrap:"anywhere" }}>{u.email}</div>
               </div>
-              <span style={{ fontSize:13, color:"#e05d26", fontWeight:700 }}>→</span>
+              <span style={{ fontSize:13, color:COLORS.accentDark, fontWeight:700 }}>→</span>
             </button>
           ))}
         </div>
       </div>
+      </div>
     </div>
   );
 }
-
 
 const CSS = `
   *{box-sizing:border-box;margin:0;padding:0;}
@@ -197,11 +241,14 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(() => {
     try { return getToken() ? JSON.parse(localStorage.getItem("artisan-user") || "null") : null; } catch { return null; }
   });
-  const [lang, setLang] = useState("en");
+  const [lang, setLang] = useState(savedLang);
+  const currency = CURRENCY_BY_LANG[lang];
   const [page, setPage] = useState("home");
   const [pageKey, setPageKey] = useState(0);
   const [selected, setSelected] = useState(null);
   const [storeArtisan, setStoreArtisan] = useState(null); // artisan whose storefront is open
+  // An artisan account without a shop profile yet (new sign-up): sent to "Set up your shop".
+  const [shopSetupNeeded, setShopSetupNeeded] = useState(false);
   const [profileArtisan, setProfileArtisan] = useState(null); // artisan whose personal profile is open
   // Pages to return to from the storefront / artisan-profile pages ("Back" pops one).
   const [backStack, setBackStack] = useState([]);
@@ -217,19 +264,17 @@ export default function App() {
   const [orderView, setOrderView] = useState(null); // { id, back }: the order detail page and where "Back" goes
   const [searchQuery, setSearchQuery] = useState("");
   const [toast, setToast] = useState(null);
-  const [currency, setCurrency] = useState("USD");
   const [rates, setRates] = useState({ MNT: 3450, KRW: 1380 });
-  const [ratesUpdated, setRatesUpdated] = useState(null);
 
   // Likes replaced the old browser-only wishlist; drop its leftover storage key.
   useEffect(() => { try { localStorage.removeItem("artisan-saved"); } catch {} }, []);
+  useEffect(() => { try { localStorage.setItem(LOCALE_KEY, lang); } catch {} }, [lang]);
   useEffect(() => {
     fetch("https://open.er-api.com/v6/latest/USD")
       .then(r => r.json())
       .then(d => {
         if (d.rates) {
           setRates({ MNT: d.rates.MNT, KRW: d.rates.KRW });
-          setRatesUpdated(new Date().toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" }));
         }
       })
       .catch(() => {});
@@ -275,12 +320,33 @@ export default function App() {
   const refreshCart = () => api.getCart().then(setCart).catch(handleApiError);
   const refreshOrders = () => api.getOrders().then(setOrders).catch(handleApiError);
 
+  // Own profile changed (photo / bio): keep the stored copy in sync.
+  const updateCurrentUser = (user) => {
+    const next = { ...currentUser, ...user };
+    localStorage.setItem("artisan-user", JSON.stringify(next));
+    setCurrentUser(next);
+  };
+
   // Cart, order history and likes are per-user — (re)load on login, clear on logout.
+  // Also refresh the stored profile (photo/bio may have changed, or predate this version).
+  const currentUserId = currentUser?.id;
   useEffect(() => {
-    if (currentUser) { refreshCart(); refreshOrders(); api.getMyLikes().then(setSavedItems).catch(handleApiError); }
-    else { setCart(null); setOrders([]); setSavedItems([]); }
+    if (currentUserId) {
+      refreshCart(); refreshOrders(); api.getMyLikes().then(setSavedItems).catch(handleApiError);
+      api.getMe().then(updateCurrentUser).catch(handleApiError);
+      if (currentUser.role === "artisan") {
+        api.getMyArtisan()
+          .then(() => setShopSetupNeeded(false))
+          .catch((err) => {
+            if (err.status !== 404) return handleApiError(err);
+            setShopSetupNeeded(true);
+            navigate("shop-setup");
+          });
+      } else setShopSetupNeeded(false);
+    }
+    else { setCart(null); setOrders([]); setSavedItems([]); setShopSetupNeeded(false); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser]);
+  }, [currentUserId]);
 
   const handleLogin = async (email, password) => {
     const { token, user } = await api.login(email, password);
@@ -288,8 +354,9 @@ export default function App() {
     localStorage.setItem("artisan-user", JSON.stringify(user));
     setCurrentUser(user);
   };
-  const handleRegister = async (name, email, password) => {
-    const { token, user } = await api.signup(name, email, password, "buyer");
+  // accountType is only a request: the server accepts "buyer" or "artisan" and nothing else.
+  const handleRegister = async (name, email, password, accountType = "buyer") => {
+    const { token, user } = await api.signup(name, email, password, accountType === "artisan" ? "artisan" : "buyer");
     setToken(token);
     localStorage.setItem("artisan-user", JSON.stringify(user));
     setCurrentUser(user);
@@ -298,6 +365,9 @@ export default function App() {
   if (!currentUser) return <LoginPage onLogin={handleLogin} onRegister={handleRegister} lang={lang} />;
 
   const t = i18n[lang];
+  // Shop pages can't work without a shop profile, so they show the setup form until it exists.
+  const SHOP_SETUP_GATED = ["shop-setup", "dashboard", "shop-orders", "shop-settings", "add-product", "edit-product"];
+  const showShopSetup = currentUser.role === "artisan" && shopSetupNeeded && SHOP_SETUP_GATED.includes(page);
   const currentUserAvatar = AVATAR_BY_ROLE[currentUser.role] || "🙂";
 
   const navigate = (pg) => { setPage(pg); setPageKey(k => k + 1); };
@@ -396,13 +466,15 @@ export default function App() {
   };
   // Prefer the freshest copy of an artisan (products reload after a profile edit).
   const liveArtisan = (a) => (a && products.find(p => p.artisan?._id === a._id)?.artisan) || a;
-  const storeProducts = storeArtisan ? products.filter(p => p.artisan?._id === storeArtisan._id) : [];
+  // The API also returns an artisan's own hidden products (isHidden) to that artisan, so
+  // they can still open them; every public list leaves them out.
+  const publicProducts = products.filter(p => !p.isHidden);
   const storeArtisanLive = liveArtisan(storeArtisan);
   const profileArtisanLive = liveArtisan(profileArtisan);
 
   const openShop = (category = "") => { setShopCategory(category); navigate("shop"); };
   const categoryLoading = Boolean(shopCategory) && categoryIds === null;
-  const filtered = products.filter(p => {
+  const filtered = publicProducts.filter(p => {
     if (shopCategory && !categoryIds?.includes(p.id)) return false;
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
@@ -412,23 +484,24 @@ export default function App() {
     return name.toLowerCase().includes(q) || artisanName.toLowerCase().includes(q) || shopName.toLowerCase().includes(q);
   });
 
-  // ── Currency helpers: prices are stored in USD, shown in the selected currency ──
+  // ── Currency helpers: prices are stored (and charged) in USD. fmtAmt shows them in the
+  // language's currency; converted amounts are approximate, hence "≈". fmtUsd is the exact USD.
+  const fmtUsd = (usd) => `$${usd.toFixed(2)}`;
   const fmtAmt = (usd) => {
-    if (currency === "MNT") return `₮${Math.round(usd * rates.MNT).toLocaleString()}`;
-    if (currency === "KRW") return `₩${Math.round(usd * rates.KRW).toLocaleString()}`;
-    return `$${usd.toFixed(2)}`;
+    if (currency === "MNT") return `≈ ₮${Math.round(usd * rates.MNT).toLocaleString()}`;
+    if (currency === "KRW") return `≈ ₩${Math.round(usd * rates.KRW).toLocaleString()}`;
+    return fmtUsd(usd);
   };
   const fmtBasic = (p) => fmtAmt(p.pricingTiers.basic.price);
   const cartCount = cart?.items?.reduce((s, i) => s + i.qty, 0) || 0;
 
   return (
-    <div style={{ fontFamily:"'Helvetica Neue',Arial,sans-serif", background: page==="home" ? COLORS.bg : "#f5f2ee", minHeight:"100vh", color:"#222" }}>
+    <div style={{ fontFamily:"'Helvetica Neue',Arial,sans-serif", background: COLORS.bg, minHeight:"100vh", color:"#222" }}>
       <style>{CSS}</style>
       <style>{THEME_CSS}</style>
 
       <Nav
         lang={lang} setLang={setLang}
-        currency={currency} setCurrency={setCurrency}
         searchQuery={searchQuery} setSearchQuery={setSearchQuery}
         onSearchSubmit={() => navigate("shop")}
         cartCount={cartCount} wishlistCount={savedItems.length}
@@ -446,7 +519,7 @@ export default function App() {
       {/* ── HOME ── */}
       {page==="home" && (
         <Home
-          lang={lang} t={t} prods={products}
+          lang={lang} t={t} prods={publicProducts}
           savedItems={savedItems} toggleSave={toggleSave} openProduct={openProduct}
           fmt={fmtBasic} navigate={navigate} openShop={openShop}
         />
@@ -456,6 +529,7 @@ export default function App() {
         <Shop
           lang={lang} t={t} filtered={filtered} loading={categoryLoading}
           category={shopCategory} openShop={openShop}
+          searchQuery={searchQuery} clearSearch={() => setSearchQuery("")}
           savedItems={savedItems} toggleSave={toggleSave} openProduct={openProduct}
           fmt={fmtBasic} navigate={navigate}
         />
@@ -472,26 +546,24 @@ export default function App() {
         />
       )}
 
-      {page==="storefront" && storeArtisanLive && (
-        <Storefront
-          lang={lang} t={t} artisan={storeArtisanLive} products={storeProducts}
-          savedItems={savedItems} toggleSave={toggleSave} openProduct={openProduct}
-          fmt={fmtBasic} navigate={navigate} openArtisanProfile={openArtisanProfile}
-          onBack={goBack}
-        />
-      )}
-
-      {page==="artisan-profile" && profileArtisanLive && (
-        <ArtisanProfile
-          t={t} artisan={profileArtisanLive} navigate={navigate}
-          openStorefront={openStorefront} onBack={goBack}
-        />
-      )}
+      {/* Shop page and personal profile are one portfolio page; "artisan-profile" opens it at About. */}
+      {ARTISAN_PAGES.includes(page) && (page==="storefront" ? storeArtisanLive : profileArtisanLive) && (() => {
+        const a = page==="storefront" ? storeArtisanLive : profileArtisanLive;
+        return (
+          <Portfolio
+            key={`${page}-${a._id}`} lang={lang} t={t} artisan={a}
+            products={publicProducts.filter(p => p.artisan?._id === a._id)}
+            savedItems={savedItems} toggleSave={toggleSave} openProduct={openProduct}
+            fmtBasic={fmtBasic} navigate={navigate} onBack={goBack}
+            focus={page==="artisan-profile" ? "about" : undefined}
+          />
+        );
+      })()}
 
       {page==="cart" && (
         <Cart
           lang={lang} t={t} cart={cart} onUpdateQty={updateQty} onRemove={removeFromCart}
-          onPaid={onPaid} onApiError={handleApiError} fmtAmt={fmtAmt} navigate={navigate}
+          onPaid={onPaid} onApiError={handleApiError} fmtAmt={fmtAmt} fmtUsd={fmtUsd} currency={currency} navigate={navigate}
         />
       )}
 
@@ -506,9 +578,16 @@ export default function App() {
         />
       )}
 
-      {page==="dashboard" && currentUser.role==="artisan" && (
+      {showShopSetup && (
+        <ShopSetup
+          key={pageKey} t={t} onApiError={handleApiError}
+          onDone={() => { setShopSetupNeeded(false); showToast(t.shopSetup.done); refreshProducts(); navigate("profile"); window.scrollTo(0, 0); }}
+        />
+      )}
+
+      {page==="dashboard" && currentUser.role==="artisan" && !showShopSetup && (
         <Dashboard
-          key={pageKey} t={t} lang={lang} fmtAmt={fmtAmt} rateMnt={rates.MNT} currency={currency}
+          key={pageKey} t={t} lang={lang} fmtAmt={fmtAmt} fmtUsd={fmtUsd} currency={currency}
           navigate={navigate} onApiError={handleApiError}
         />
       )}
@@ -521,7 +600,7 @@ export default function App() {
         />
       )}
 
-      {page==="shop-orders" && currentUser.role==="artisan" && (
+      {page==="shop-orders" && currentUser.role==="artisan" && !showShopSetup && (
         <ShopOrders key={pageKey} t={t} fmtAmt={fmtAmt} navigate={navigate} openOrder={openOrder} onApiError={handleApiError} />
       )}
 
@@ -532,14 +611,14 @@ export default function App() {
         />
       )}
 
-      {page==="shop-settings" && currentUser.role==="artisan" && (
+      {page==="shop-settings" && currentUser.role==="artisan" && !showShopSetup && (
         <ArtisanProfileForm
           key={pageKey} t={t} navigate={navigate} onApiError={handleApiError}
           onSaved={() => { showToast(t.shopSettings.saved); refreshProducts(); }}
         />
       )}
 
-      {page==="add-product" && currentUser.role==="artisan" && (
+      {page==="add-product" && currentUser.role==="artisan" && !showShopSetup && (
         <AddProductForm
           key={pageKey} t={t} rateMnt={rates.MNT} onApiError={handleApiError}
           onBack={() => navigate("shop-settings")}
@@ -547,7 +626,7 @@ export default function App() {
         />
       )}
 
-      {page==="edit-product" && selected && selected.artisan?.user?._id === currentUser.id && (
+      {page==="edit-product" && !showShopSetup && selected && selected.artisan?.user?._id === currentUser.id && (
         <AddProductForm
           key={pageKey} t={t} product={selected} rateMnt={rates.MNT} onApiError={handleApiError}
           onBack={() => navigate("detail")}
@@ -555,115 +634,46 @@ export default function App() {
         />
       )}
 
-      <div style={{ display: ["home","shop","detail","cart","commission","commission-board","my-commissions","dashboard","order-detail","shop-orders","shop-settings","add-product","edit-product","storefront","artisan-profile"].includes(page) ? "none" : "block", maxWidth:430, margin:"0 auto", position:"relative" }}>
-
       {/* ── SAVED ── */}
       {page==="saved" && (
-        <div className="page" key={pageKey} style={{ padding:"18px 16px 90px", minHeight:"100vh" }}>
-          <div style={{ fontWeight:700, fontSize:18, marginBottom:18, color:"#111" }}>
-            {t.saved} <span style={{ fontWeight:400, color:"#bbb", fontSize:15 }}>({savedItems.length})</span>
+        <div style={{ background:COLORS.bg, minHeight:"100vh" }}>
+          <div className="a-page page" key={pageKey}>
+            <h1 style={{ fontFamily:FONT_SERIF, fontSize:30, fontWeight:600, color:COLORS.ink, marginBottom:24 }}>
+              {t.saved} <span style={{ fontFamily:FONT_SANS, fontWeight:400, color:COLORS.inkSoft, fontSize:16 }}>({savedItems.length})</span>
+            </h1>
+            {savedItems.length===0 ? (
+              <div style={{ textAlign:"center", padding:"64px 0", fontFamily:FONT_SANS }}>
+                <div style={{ fontSize:52, marginBottom:14 }}>🤍</div>
+                <div style={{ fontFamily:FONT_SERIF, fontSize:20, color:COLORS.ink, marginBottom:6 }}>{t.savedEmpty}</div>
+                <div style={{ fontSize:13, color:COLORS.inkSoft, marginBottom:24 }}>{t.savedHint}</div>
+                <button type="button" className="a-btn-primary" onClick={() => navigate("home")}>{t.browseItems}</button>
+              </div>
+            ) : (
+              <div className="a-product-grid">
+                {products.filter(p => savedItems.includes(p.id)).map(p => (
+                  <ProductCard
+                    key={p.id} product={p} nameMn={p.title} nameEn={p.titleEn} lang={lang}
+                    isSaved onToggleSave={toggleSave} onOpen={openProduct} price={fmtBasic(p)}
+                    certifiedLabel={t.homePage.certified} wishlistAddLabel={t.homePage.wishlistAdd} wishlistRemoveLabel={t.homePage.wishlistRemove}
+                  />
+                ))}
+              </div>
+            )}
           </div>
-          {savedItems.length===0 ? (
-            <div style={{ textAlign:"center", padding:"70px 0" }}>
-              <div style={{ fontSize:52, marginBottom:14 }}>🤍</div>
-              <div style={{ fontSize:15, color:"#555", marginBottom:6 }}>{t.savedEmpty}</div>
-              <div style={{ fontSize:13, color:"#bbb", marginBottom:26 }}>{t.savedHint}</div>
-              <button className="ebtn" onClick={() => navigate("home")}>{t.browseItems}</button>
-            </div>
-          ) : (
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-              {products.filter(p => savedItems.includes(p.id)).map(p => (
-                <div key={p.id} className="pcard" style={{ background:"white", borderRadius:14, overflow:"hidden", border:"1px solid #ede8e0" }} onClick={() => openProduct(p)}>
-                  <div style={{ position:"relative", paddingBottom:"100%", background:"#f5f1ec" }}>
-                    {p.images?.[0]
-                      ? <img src={assetUrl(p.images[0])} alt="" style={{ position:"absolute", inset:0, width:"100%", height:"100%", objectFit:"cover" }} />
-                      : <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", fontSize:50 }}>{placeholderEmoji(p.category)}</div>
-                    }
-                    <button className="save-pill" onClick={e=>toggleSave(p.id,e)}>❤️</button>
-                  </div>
-                  <div style={{ padding:"10px 12px 13px" }}>
-                    <div style={{ fontSize:12, lineHeight:1.35, marginBottom:4, fontWeight:500, color:"#111" }}>{lang==="mn" ? p.title : p.titleEn || p.title}</div>
-                    <div style={{ fontWeight:700, fontSize:14, color:"#111" }}>{fmtBasic(p)}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       )}
 
       {/* ── PROFILE ── */}
       {page==="profile" && (
-        <div className="page" key={pageKey} style={{ padding:"20px 16px 90px", minHeight:"100vh" }}>
-          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:24 }}>
-            <button onClick={() => navigate("home")} style={{ background:"none", border:"none", fontSize:22, cursor:"pointer", color:"#666" }}>‹</button>
-            <div style={{ fontWeight:700, fontSize:18, color:"#111" }}>{t.profile}</div>
-          </div>
-          <div style={{ background:"white", borderRadius:18, padding:"28px 20px", border:"1px solid #ede8e0", marginBottom:14, textAlign:"center" }}>
-            <div style={{ width:72, height:72, borderRadius:"50%", background:"linear-gradient(135deg,#fdf0e0,#fce0c0)", border:"3px solid #e05d26", display:"flex", alignItems:"center", justifyContent:"center", fontSize:36, margin:"0 auto 12px", boxShadow:"0 4px 14px rgba(224,93,38,0.2)" }}>{currentUserAvatar}</div>
-            <div style={{ fontWeight:700, fontSize:20, marginBottom:4, color:"#111" }}>{currentUser.name}</div>
-            <div style={{ fontSize:13, color:"#bbb", marginBottom:10 }}>{currentUser.email}</div>
-            <div style={{ display:"inline-block", background:"#fff0eb", color:"#e05d26", border:"1px solid #fddcc8", borderRadius:20, padding:"4px 14px", fontSize:12, fontWeight:600 }}>{currentUser.role}</div>
-            {currentUser.role === "artisan" && (
-              <div style={{ marginTop:16, display:"flex", gap:8, justifyContent:"center", flexWrap:"wrap" }}>
-                <button type="button" className="ebtn" style={{ padding:"10px 20px", fontSize:13 }} onClick={() => navigate("dashboard")}>
-                  {t.dashboard.open}
-                </button>
-                <button type="button" className="ebtn" style={{ padding:"10px 20px", fontSize:13 }} onClick={() => navigate("shop-orders")}>
-                  {t.orders.shopOpen}
-                </button>
-                <button type="button" className="ebtn" style={{ padding:"10px 20px", fontSize:13 }} onClick={() => navigate("add-product")}>
-                  {t.addProduct.open}
-                </button>
-                <button type="button" className="obtn" style={{ padding:"10px 20px", fontSize:13 }} onClick={() => navigate("shop-settings")}>
-                  {t.shopSettings.open}
-                </button>
-                <button type="button" className="obtn" style={{ padding:"10px 20px", fontSize:13 }} onClick={() => navigate("commission-board")}>
-                  {t.commissions.boardOpen}
-                </button>
-              </div>
-            )}
-            <div style={{ marginTop:12 }}>
-              <button type="button" className="obtn" style={{ padding:"10px 20px", fontSize:13 }} onClick={() => navigate("my-commissions")}>
-                {t.commissions.mineOpen}
-              </button>
-            </div>
-          </div>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
-            {[[cart?.items?.length || 0,"🛒",t.cart],[savedItems.length,"🤍",t.saved]].map(([val,icon,lbl]) => (
-              <div key={lbl} style={{ background:"white", borderRadius:14, padding:"18px 16px", border:"1px solid #ede8e0", textAlign:"center" }}>
-                <div style={{ fontSize:22, marginBottom:4 }}>{icon}</div>
-                <div style={{ fontFamily:"Georgia,serif", fontSize:28, fontWeight:700, color:"#e05d26" }}>{val}</div>
-                <div style={{ fontSize:12, color:"#bbb", marginTop:2 }}>{lbl}</div>
-              </div>
-            ))}
-          </div>
-
-          <div style={{ background:"white", borderRadius:14, padding:"16px 18px", border:"1px solid #ede8e0", marginBottom:14 }}>
-            <div style={{ fontWeight:700, fontSize:14, marginBottom:12, color:"#111" }}>{t.orders.historyTitle}</div>
-            {orders.length === 0 ? (
-              <div style={{ fontSize:13, color:"#bbb" }}>{t.orders.none}</div>
-            ) : (
-              orders.map(o => (
-                <button key={o._id} type="button" onClick={() => openOrder(o._id)}
-                  style={{ display:"flex", width:"100%", justifyContent:"space-between", alignItems:"center", padding:"10px 0", background:"none", border:"none", borderBottom:"1px solid #f0ece8", cursor:"pointer", textAlign:"left", fontFamily:"inherit" }}>
-                  <div>
-                    <div style={{ fontSize:13, fontWeight:600, color:"#222" }}>{t.orders.items(o.items.length)}</div>
-                    <div style={{ fontSize:11, color:"#bbb" }}>{new Date(o.createdAt).toLocaleDateString()} · {t.orders.status[o.status] || o.status}</div>
-                  </div>
-                  <div style={{ fontWeight:700, fontSize:14, color:"#e05d26" }}>{fmtAmt(o.total)} ›</div>
-                </button>
-              ))
-            )}
-          </div>
-
-          <button onClick={logout} style={{ width:"100%", background:"white", color:"#e05d26", border:"1.5px solid #e05d26", borderRadius:26, padding:"13px 0", fontSize:15, fontWeight:600, cursor:"pointer", transition:"all 0.15s" }}>
-            {t.logout}
-          </button>
-        </div>
+        <ProfilePage
+          key={pageKey} t={t} lang={lang} user={currentUser} emoji={currentUserAvatar}
+          products={products} savedItems={savedItems} toggleSave={toggleSave} openProduct={openProduct}
+          fmtBasic={fmtBasic} fmtAmt={fmtAmt} cartLines={cart?.items?.length || 0}
+          orders={orders} openOrder={openOrder} navigate={navigate} logout={logout} shopSetupNeeded={shopSetupNeeded}
+          onApiError={handleApiError}
+          onUpdated={(user) => { updateCurrentUser(user); if (currentUser.role === "artisan") refreshProducts(); }}
+        />
       )}
-
-      </div>
     </div>
   );
 }

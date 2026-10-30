@@ -1,14 +1,14 @@
 import { COLORS, FONT_SERIF, FONT_SANS } from "../theme";
-import { placeholderEmoji } from "../placeholders";
 import { artisanInfo } from "../artisanInfo";
 import { bonusText } from "../tiers";
 import { useState } from "react";
 import PayPalCheckout from "./PayPalCheckout";
 import ShippingAddressForm, { emptyAddress, validateAddress } from "./ShippingAddressForm";
+import ProductImage from "./ProductImage";
 
 const TIER_DISPLAY = { basic: "Basic", story: "Story", patron: "Patron" };
 
-export default function Cart({ lang, t, cart, onUpdateQty, onRemove, onPaid, onApiError, fmtAmt, navigate }) {
+export default function Cart({ lang, t, cart, onUpdateQty, onRemove, onPaid, onApiError, fmtAmt, fmtUsd, currency, navigate }) {
   const c = t.cartPage;
   const items = cart?.items || [];
   const isEmpty = items.length === 0;
@@ -51,12 +51,12 @@ export default function Cart({ lang, t, cart, onUpdateQty, onRemove, onPaid, onA
                 return (
                   <div
                     key={`${p._id}-${item.tier}`}
-                    style={{ display:"flex", gap:16, alignItems:"center", padding:"20px 0", borderBottom: idx < items.length - 1 ? `1px solid ${COLORS.border}` : "none" }}
+                    style={{ display:"flex", flexWrap:"wrap", gap:"12px 16px", alignItems:"center", padding:"20px 0", borderBottom: idx < items.length - 1 ? `1px solid ${COLORS.border}` : "none" }}
                   >
-                    <div style={{ width:80, height:80, flexShrink:0, background:COLORS.bgSoft, border:`1px solid ${COLORS.border}`, borderRadius:2, display:"flex", alignItems:"center", justifyContent:"center", fontSize:32, overflow:"hidden" }}>
-                      {placeholderEmoji(p.category)}
+                    <div style={{ position:"relative", width:80, height:80, flexShrink:0, border:`1px solid ${COLORS.border}`, borderRadius:2, overflow:"hidden" }}>
+                      <ProductImage src={p.images?.[0]} alt={name} />
                     </div>
-                    <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ flex:"1 1 160px", minWidth:0 }}>
                       <div style={{ fontFamily:FONT_SERIF, fontSize:17, fontWeight:600, color:COLORS.ink, marginBottom:4 }}>{name}</div>
                       <div style={{ fontFamily:FONT_SANS, fontSize:12, color:COLORS.inkSoft }}>{c.by(artisanName)} · {TIER_DISPLAY[item.tier]}</div>
                       {item.tier !== "basic" && (
@@ -65,12 +65,14 @@ export default function Cart({ lang, t, cart, onUpdateQty, onRemove, onPaid, onA
                         </div>
                       )}
                     </div>
+                    {/* Quantity, price and remove stay together; on narrow screens they wrap below. */}
+                    <div style={{ display:"flex", alignItems:"center", gap:16, marginLeft:"auto" }}>
                     <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                       <button type="button" className="a-qty-btn" aria-label={`Decrease quantity of ${name}`} onClick={() => onUpdateQty(p._id, item.tier, Math.max(1, item.qty - 1))}>−</button>
                       <input className="a-qty-input" type="text" inputMode="numeric" readOnly value={item.qty} aria-label={`Quantity of ${name}`} />
                       <button type="button" className="a-qty-btn" aria-label={`Increase quantity of ${name}`} onClick={() => onUpdateQty(p._id, item.tier, item.qty + 1)}>+</button>
                     </div>
-                    <div style={{ width:80, textAlign:"right", fontFamily:FONT_SANS, fontWeight:700, fontSize:15, color:COLORS.ink }}>
+                    <div style={{ minWidth:80, textAlign:"right", whiteSpace:"nowrap", fontFamily:FONT_SANS, fontWeight:700, fontSize:15, color:COLORS.ink }}>
                       {fmtAmt(lineTotal(item))}
                     </div>
                     <button
@@ -81,6 +83,7 @@ export default function Cart({ lang, t, cart, onUpdateQty, onRemove, onPaid, onA
                     >
                       <span aria-hidden="true">🗑</span>
                     </button>
+                    </div>
                   </div>
                 );
               })}
@@ -100,6 +103,12 @@ export default function Cart({ lang, t, cart, onUpdateQty, onRemove, onPaid, onA
               <div style={{ display:"flex", justifyContent:"space-between", fontFamily:FONT_SERIF, fontSize:20, fontWeight:700, color:COLORS.ink, marginBottom:20 }}>
                 <span>{c.total}</span><span>{fmtAmt(totalUSD)}</span>
               </div>
+              {/* Shown amounts are converted for display; PayPal charges the server's USD total. */}
+              {currency !== "USD" && (
+                <p role="note" style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:700, color:COLORS.ink, background:COLORS.bgSoft, border:`1px solid ${COLORS.border}`, borderRadius:2, padding:"8px 12px", margin:"-8px 0 20px" }}>
+                  {c.chargedInUsd(fmtUsd(totalUSD))}
+                </p>
+              )}
               <ShippingAddressForm text={t.shipping} value={address} errors={addressErrors}
                 onChange={(next) => { setAddress(next); if (Object.keys(addressErrors).length) setAddressErrors(validateAddress(next, t.shipping)); }} />
               <PayPalCheckout t={t} onPaid={onPaid} onApiError={onApiError} getShippingAddress={getShippingAddress} />

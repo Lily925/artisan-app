@@ -3,10 +3,14 @@ import { placeholderEmoji } from "../placeholders";
 import ProductCard from "./ProductCard";
 import Footer from "./Footer";
 
-export default function Shop({ lang, t, filtered, loading, category, openShop, savedItems, toggleSave, openProduct, fmt, navigate }) {
+export default function Shop({ lang, t, filtered, loading, category, searchQuery, clearSearch, openShop, savedItems, toggleSave, openProduct, fmt, navigate }) {
   const shop = t.shopPage;
   const home = t.homePage;
   const chips = [{ key: "", label: shop.allCategories }, ...t.productCategories];
+  const categoryLabel = t.productCategories.find((c) => c.key === category)?.label;
+  const query = searchQuery?.trim();
+  // The search and the selected category both narrow the list, so name both.
+  const emptyTitle = query ? shop.emptySearch(query, category ? categoryLabel || category : "") : category ? shop.emptyCategory(categoryLabel || category) : shop.emptyAll;
 
   return (
     <div style={{ background:COLORS.bg, minHeight:"100vh" }}>
@@ -37,7 +41,20 @@ export default function Shop({ lang, t, filtered, loading, category, openShop, s
           ))}
         </nav>
 
-        <div className="a-product-grid" style={{ marginBottom:64 }}>
+        {!loading && filtered.length === 0 && (
+          <section className="a-info-block" role="status" style={{ textAlign:"center", padding:"48px 24px", marginBottom:48 }}>
+            <div aria-hidden="true" style={{ fontSize:44, marginBottom:12 }}>{placeholderEmoji(category || "crafts")}</div>
+            <h2 style={{ fontFamily:FONT_SERIF, fontSize:26, fontWeight:600, color:COLORS.ink, marginBottom:8, overflowWrap:"anywhere" }}>{emptyTitle}</h2>
+            <p style={{ fontFamily:FONT_SANS, fontSize:14, color:COLORS.inkSoft, marginBottom:20 }}>{shop.emptySub}</p>
+            <div style={{ display:"flex", gap:12, justifyContent:"center", flexWrap:"wrap" }}>
+              {query && <button type="button" className="a-btn-primary" onClick={clearSearch}>{shop.clearSearch}</button>}
+              {category && <button type="button" className={query ? "a-btn-outline" : "a-btn-primary"} onClick={() => openShop()}>{shop.showAll}</button>}
+              <button type="button" className="a-btn-outline" onClick={() => navigate("commission")}>{shop.bannerCtaCommission}</button>
+            </div>
+          </section>
+        )}
+
+        <div className="a-product-grid" style={{ marginBottom: filtered.length ? 64 : 0 }}>
           {filtered.map((p) => {
             return (
               <ProductCard

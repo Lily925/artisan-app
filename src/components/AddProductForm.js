@@ -1,9 +1,7 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { COLORS, FONT_SERIF, FONT_SANS } from "../theme";
-import { api, assetUrl } from "../api";
-
-const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
-const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
+import { api } from "../api";
+import PhotoPicker, { existingPhotos } from "./PhotoPicker";
 
 // Edit mode starts in USD: that's the exact stored price (a ₮ round-trip would show
 // e.g. 79,002 instead of 79,000). The artisan can switch to ₮ and type a new price.
@@ -16,36 +14,17 @@ const initialForm = (product) => product
 const MAX_BONUS_CHARS = 100;
 
 // Artisan self-service product form: adds a product, or edits one when `product`
-// is given (photo optional then). Prices can be typed in ₮ and are converted to USD
+// is given. 1-5 photos (PhotoPicker); the first is the cover. Prices can be typed in ₮ and are converted to USD
 // at the live rate, the same way seeded shop prices were; the server derives Story/Patron.
 export default function AddProductForm({ t, product, rateMnt, onBack, onSaved, onApiError }) {
   const a = t.addProduct;
   const editing = Boolean(product);
-  const currentPhoto = editing ? assetUrl(product.images?.[0]) : "";
-  const [photo, setPhoto] = useState(null);
-  const [preview, setPreview] = useState(currentPhoto);
-  const [dragOver, setDragOver] = useState(false);
+  const [photos, setPhotos] = useState(() => existingPhotos(product?.images));
   const [form, setForm] = useState(() => initialForm(product));
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // Local preview URL for the chosen photo, released when it changes or the page closes.
-  useEffect(() => {
-    if (!photo) { setPreview(currentPhoto); return undefined; }
-    const url = URL.createObjectURL(photo);
-    setPreview(url);
-    return () => URL.revokeObjectURL(url);
-  }, [photo, currentPhoto]);
-
   const update = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
-
-  const pickPhoto = (file) => {
-    if (!file) return;
-    if (!PHOTO_TYPES.includes(file.type)) { setError(a.photoType); return; }
-    if (file.size > MAX_PHOTO_BYTES) { setError(a.photoTooBig); return; }
-    setError("");
-    setPhoto(file);
-  };
 
   const priceNumber = Number(form.price.replace(/[\s,]/g, ""));
   const usd = form.price.trim() && priceNumber > 0
@@ -54,12 +33,16 @@ export default function AddProductForm({ t, product, rateMnt, onBack, onSaved, o
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!photo && !editing) { setError(a.photoRequired); return; }
+    if (photos.length === 0) { setError(a.photoRequired); return; }
     if (!form.title.trim() || !form.titleEn.trim() || !form.category) { setError(a.required); return; }
     if (!usd) { setError(a.priceInvalid); return; }
 
     const data = new FormData();
-    if (photo) data.append("photo", photo);
+    // New files in display order, plus the full order (kept URLs and "new:<i>") for the server.
+    let n = 0;
+    const imageOrder = photos.map((ph) => (ph.file ? `new:${n++}` : ph.url));
+    photos.forEach((ph) => { if (ph.file) data.append("photos", ph.file); });
+    if (editing) data.append("imageOrder", JSON.stringify(imageOrder));
     data.append("title", form.title.trim());
     data.append("titleEn", form.titleEn.trim());
     data.append("category", form.category);
@@ -84,7 +67,7 @@ export default function AddProductForm({ t, product, rateMnt, onBack, onSaved, o
 
   return (
     <div style={{ background:COLORS.bg, minHeight:"100vh" }}>
-      <div className="a-page" style={{ maxWidth:640 }}>
+      <div className="a-page a-page-form">
         <div className="a-breadcrumb">
           <button type="button" className="a-shop-link" onClick={onBack} style={{ fontFamily:FONT_SANS, fontSize:12, color:COLORS.inkSoft }}>
             ‹ {a.back}
@@ -94,31 +77,8 @@ export default function AddProductForm({ t, product, rateMnt, onBack, onSaved, o
         <p style={{ fontFamily:FONT_SANS, fontSize:14, color:COLORS.inkSoft, marginBottom:24 }}>{editing ? a.editIntro : a.intro}</p>
 
         <form onSubmit={handleSubmit} noValidate>
-          <div style={{ marginBottom:20 }}>
-            <label className="a-label" htmlFor="ap-photo">{a.photo}</label>
-            <label
-              htmlFor="ap-photo"
-              className={`a-dropzone${dragOver ? " dragover" : ""}`}
-              style={{ display:"block", padding: preview ? 12 : undefined }}
-              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={(e) => { e.preventDefault(); setDragOver(false); pickPhoto(e.dataTransfer.files[0]); }}
-            >
-              {preview ? (
-                <>
-                  <img src={preview} alt="" style={{ display:"block", width:"100%", maxHeight:320, objectFit:"contain", marginBottom:8 }} />
-                  <span style={{ fontFamily:FONT_SANS, fontSize:13, color:COLORS.accentDark, fontWeight:600 }}>{a.photoChange}</span>
-                </>
-              ) : (
-                <>
-                  <div aria-hidden="true" style={{ fontSize:20, marginBottom:6 }}>⬆</div>
-                  <div style={{ fontFamily:FONT_SANS, fontSize:13, color:COLORS.inkSoft }}>{a.photoDrop}</div>
-                </>
-              )}
-            </label>
-            <input id="ap-photo" type="file" accept="image/jpeg,image/png,image/webp" className="a-sr-only"
-              aria-describedby="ap-photo-hint" onChange={(e) => pickPhoto(e.target.files[0])} />
-            <div id="ap-photo-hint" style={hint}>{photo ? photo.name : editing ? `${a.photoKeep} · ${a.photoHint}` : a.photoHint}</div>
+          <div style={{ marginBottom:24 }}>
+            <PhotoPicker a={a} items={photos} onChange={setPhotos} onError={setError} inputId="ap-photo" />
           </div>
 
           <div style={{ display:"flex", flexWrap:"wrap", gap:"0 16px" }}>

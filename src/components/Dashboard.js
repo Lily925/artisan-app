@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { COLORS, FONT_SERIF, FONT_SANS } from "../theme";
-import { api, assetUrl } from "../api";
-import { placeholderEmoji } from "../placeholders";
+import { api } from "../api";
+import ProductImage from "./ProductImage";
 
 // Status counts always shown; "paid" and "cancelled" only appear when non-zero.
 const MAIN_STATUSES = ["pending", "in_production", "shipped", "completed"];
@@ -107,7 +107,7 @@ function DailyChart({ days, field, label }) {
   );
 }
 
-export default function Dashboard({ t, lang, fmtAmt, rateMnt, currency, navigate, onApiError }) {
+export default function Dashboard({ t, lang, fmtAmt, fmtUsd, currency, navigate, onApiError }) {
   const d = t.dashboard;
   const [data, setData] = useState(null);
   const [failed, setFailed] = useState(false);
@@ -129,7 +129,7 @@ export default function Dashboard({ t, lang, fmtAmt, rateMnt, currency, navigate
 
   const page = (children) => (
     <div style={{ background:COLORS.bg, minHeight:"100vh" }}>
-      <div className="a-page" style={{ maxWidth:1000 }}>
+      <div className="a-page">
         <button type="button" className="a-shop-link" style={{ fontFamily:FONT_SANS, fontSize:13, marginBottom:16 }} onClick={() => navigate("profile")}>
           ‹ {d.back}
         </button>
@@ -145,7 +145,6 @@ export default function Dashboard({ t, lang, fmtAmt, rateMnt, currency, navigate
   const { totals, statusCounts, products, daily } = data;
   const demo = data.demo || { orders: 0, views: 0 };
   const hasDemo = demo.orders > 0 || demo.views > 0;
-  const mnt = (usd) => `₮${Math.round(usd * rateMnt).toLocaleString()}`;
   const productName = (p) => (lang === "mn" ? p.title : p.titleEn || p.title);
   const statuses = [...MAIN_STATUSES, ...EXTRA_STATUSES.filter((s) => statusCounts[s] > 0)];
   const field = metric === "units" ? "units" : "views";
@@ -177,7 +176,7 @@ export default function Dashboard({ t, lang, fmtAmt, rateMnt, currency, navigate
         <StatTile label={d.orders} value={fmtCount(totals.orders)} />
         <StatTile label={d.unitsSold} value={fmtCount(totals.unitsSold)} />
         <StatTile label={d.revenue} value={fmtAmt(totals.revenue)}
-          sub={currency === "MNT" ? d.revenueHint : `${mnt(totals.revenue)} · ${d.revenueHint}`} />
+          sub={currency === "USD" ? d.revenueHint : `${fmtUsd(totals.revenue)} · ${d.revenueHint}`} />
         <StatTile label={d.views} value={fmtCount(totals.views)} />
         <StatTile label={d.likes} value={fmtCount(totals.likes)} />
       </div>
@@ -280,10 +279,8 @@ export default function Dashboard({ t, lang, fmtAmt, rateMnt, currency, navigate
                   <tr key={p.id}>
                     <td style={{ ...td, textAlign:"left", whiteSpace:"normal" }}>
                       <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                        <div style={{ width:40, height:40, flexShrink:0, background:COLORS.bgSoft, border:`1px solid ${COLORS.border}`, borderRadius:2, overflow:"hidden", display:"flex", alignItems:"center", justifyContent:"center" }}>
-                          {p.image
-                            ? <img src={assetUrl(p.image)} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
-                            : <span aria-hidden="true">{placeholderEmoji(p.category)}</span>}
+                        <div style={{ position:"relative", width:40, height:40, flexShrink:0, border:`1px solid ${COLORS.border}`, borderRadius:2, overflow:"hidden" }}>
+                          <ProductImage src={p.image} alt="" />
                         </div>
                         <span style={{ overflowWrap:"anywhere" }}>
                           {productName(p)} {p.deleted && <span style={{ color:COLORS.inkSoft }}>{d.deleted}</span>}

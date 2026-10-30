@@ -32,6 +32,14 @@ export const THEME_CSS = `
   .a-nav-link{font-family:${FONT_SANS};font-size:12px;font-weight:700;color:${COLORS.inkSoft};background:none;border:none;cursor:pointer;padding:8px 6px;min-height:44px;transition:color 0.15s;}
   .a-nav-link:hover,.a-nav-link.active{color:${COLORS.ink};}
 
+  /* Language + currency switcher: one segmented control, active option filled pink. */
+  .a-locale-switch{border:1.5px solid ${COLORS.border};border-radius:2px;padding:2px;gap:2px;background:${COLORS.card};}
+  .a-locale-btn{font-family:${FONT_SANS};font-size:12px;font-weight:700;color:${COLORS.inkSoft};background:none;border:none;border-radius:2px;cursor:pointer;padding:0 10px;min-height:38px;min-width:44px;white-space:nowrap;transition:background 0.15s,color 0.15s;}
+  .a-locale-btn:hover{color:${COLORS.ink};background:${COLORS.bgSoft};}
+  .a-locale-btn.active{background:${COLORS.accent};color:${COLORS.ink};}
+  .a-locale-btn:focus-visible{outline:2px solid ${COLORS.accentDark};outline-offset:1px;}
+  .a-locale-sym{font-weight:400;opacity:0.75;}
+
   .a-search-input{border:1.5px solid ${COLORS.border};border-radius:2px;padding:0 14px;font-family:${FONT_SANS};font-size:13px;height:44px;outline:none;background:${COLORS.card};color:${COLORS.ink};width:100%;}
   .a-search-input:focus{border-color:${COLORS.accentDark};box-shadow:0 0 0 3px rgba(232,169,188,0.3);}
 
@@ -48,18 +56,49 @@ export const THEME_CSS = `
 
   .a-badge-certified{display:inline-flex;align-items:center;gap:4px;position:absolute;bottom:8px;left:8px;background:${COLORS.card};color:${COLORS.accentDark};border:1px solid ${COLORS.accentSoft};border-radius:2px;font-family:${FONT_SANS};font-size:9px;font-weight:700;padding:4px 8px;letter-spacing:0.3px;text-transform:uppercase;}
 
-  .a-nav-row{max-width:1200px;margin:0 auto;padding:12px 24px;display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;}
+  .a-nav-row{padding-top:12px;padding-bottom:12px;display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;}
   .a-nav-group{display:flex;gap:4px;flex-shrink:0;}
   .a-search-form{flex:1 1 200px;min-width:160px;}
 
-  .a-product-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;}
-  @media (max-width:1024px){.a-product-grid{grid-template-columns:repeat(3,1fr);}}
-  @media (max-width:720px){.a-product-grid{grid-template-columns:repeat(2,1fr);}}
-  @media (max-width:460px){.a-product-grid{grid-template-columns:1fr;}}
+  /* Product lists: as many ~220px+ columns as fit (desktop 4-5, tablet 2-3, phone 1-2). */
+  .a-product-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,220px),1fr));gap:20px;}
+  @media (max-width:640px){.a-product-grid{gap:14px;}}
+  /* Larger cards (commission requests): 2 columns on wide screens, 1 below ~900px. */
+  .a-card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,420px),1fr));gap:16px;align-items:start;}
 
   .a-sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;}
 
-  .a-page{max-width:1200px;margin:0 auto;padding:40px 24px 64px;}
+  /* The one shared page container: full width up to 1280px, centered, 24px sides
+     (16px on phones). Header and footer rows use .a-container (same sides, no vertical
+     padding). .a-page-form narrows it for form pages, still centered. */
+  .a-container,.a-page{width:100%;max-width:1280px;margin-left:auto;margin-right:auto;padding-left:24px;padding-right:24px;}
+  .a-page{padding-top:40px;padding-bottom:64px;}
+  .a-page.a-page-form{max-width:calc(680px + 48px);}
+  @media (max-width:640px){
+    .a-container,.a-page{padding-left:16px;padding-right:16px;}
+    .a-page{padding-top:24px;padding-bottom:48px;}
+    .a-page.a-page-form{max-width:calc(680px + 32px);}
+  }
+  .a-readable{max-width:72ch;}
+
+  /* Profile: sticky ~340px card on the left, content on the right (>= 1024px); one column below. */
+  .a-profile-layout{display:grid;grid-template-columns:1fr;gap:20px;align-items:start;}
+  @media (min-width:1024px){
+    .a-profile-layout{grid-template-columns:340px minmax(0,1fr);gap:32px;}
+    /* Sticky, but never taller than the screen: a long card scrolls on its own. */
+    .a-profile-side{position:sticky;top:96px;max-height:calc(100vh - 112px);overflow-y:auto;overscroll-behavior:contain;}
+  }
+  .a-stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;}
+
+  /* Order detail: status + items on the left, shipping + payout on the right (>= 1024px). */
+  .a-order-layout{display:grid;grid-template-columns:minmax(0,1fr);}
+  .a-order-layout > *{min-width:0;}
+  @media (min-width:1024px){
+    .a-order-layout.has-aside{grid-template-columns:minmax(0,1fr) 380px;grid-template-areas:"status aside" "items aside";grid-template-rows:auto 1fr;column-gap:24px;align-items:start;}
+    .a-order-layout.has-aside .a-order-status{grid-area:status;}
+    .a-order-layout.has-aside .a-order-aside{grid-area:aside;}
+    .a-order-layout.has-aside .a-order-items{grid-area:items;}
+  }
   .a-breadcrumb{font-family:${FONT_SANS};font-size:12px;color:${COLORS.inkSoft};margin-bottom:20px;}
   .a-breadcrumb a{color:${COLORS.inkSoft};text-decoration:none;}
   .a-breadcrumb a:hover{color:${COLORS.ink};text-decoration:underline;}
@@ -73,8 +112,6 @@ export const THEME_CSS = `
   .a-tier-card:hover{border-color:${COLORS.accentDark};}
   .a-tier-card.selected{border-color:${COLORS.accentDark};background:${COLORS.bgSoft};box-shadow:0 0 0 1px ${COLORS.accentDark};}
 
-  .a-gallery-thumb{border:1.5px solid ${COLORS.border};border-radius:2px;overflow:hidden;cursor:pointer;background:${COLORS.bgSoft};padding:0;aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:24px;transition:border-color 0.15s;}
-  .a-gallery-thumb:hover,.a-gallery-thumb.selected{border-color:${COLORS.accentDark};}
 
   .a-callout{background:${COLORS.bgSoft};border:1px solid ${COLORS.border};border-radius:2px;padding:16px 18px;}
   .a-info-block{background:${COLORS.card};border:1px solid ${COLORS.border};border-radius:2px;padding:18px 20px;}
@@ -106,6 +143,9 @@ export const THEME_CSS = `
   .a-two-col{display:grid;grid-template-columns:1fr 1fr;gap:48px;}
   @media (max-width:860px){.a-two-col{grid-template-columns:1fr;gap:32px;}}
 
-  .a-layout-side{display:grid;grid-template-columns:1fr 320px;gap:32px;align-items:start;}
+  .a-layout-side{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:32px;align-items:start;}
+  .a-layout-side > *{min-width:0;}
+  /* Browsers give <fieldset> min-width:min-content, which can push a narrow column wider than the screen. */
+  fieldset{min-width:0;}
   @media (max-width:900px){.a-layout-side{grid-template-columns:1fr;}}
 `;

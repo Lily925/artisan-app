@@ -1,6 +1,9 @@
 // Normalizes a populated Product.artisan into what the UI shows: the shop name
 // (falling back to the artisan's own name) plus optional Instagram/contact info
-// and the public personal-profile fields.
+// and the public personal-profile fields (the owner's own photo and short bio come from
+// their user account; the server sends them for artisans only, never for buyers).
+import { assetUrl } from "./api";
+
 const IG_HANDLE = /^[A-Za-z0-9._]{1,30}$/;
 const PHOTO_URL = /^https?:\/\/\S+$|^\/\S*$/;
 
@@ -19,5 +22,7 @@ export function artisanInfo(artisan) {
     photoUrl: PHOTO_URL.test(artisan?.photoUrl || "") ? artisan.photoUrl : "",
     yearsExperience: Number.isFinite(years) && years >= 0 ? years : null,
     location: artisan?.location || "",
+    avatarUrl: PHOTO_URL.test(artisan?.user?.avatarUrl || "") ? assetUrl(artisan.user.avatarUrl) : "",
+    personalBio: artisan?.user?.bio || "",
   };
 }

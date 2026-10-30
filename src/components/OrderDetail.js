@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { COLORS, FONT_SERIF, FONT_SANS } from "../theme";
-import { api, assetUrl } from "../api";
-import { placeholderEmoji } from "../placeholders";
+import { api } from "../api";
 import { bonusText } from "../tiers";
+import ProductImage from "./ProductImage";
 
 const fmtDate = (d) => new Date(d).toLocaleDateString([], { dateStyle: "medium" });
 
@@ -74,8 +74,8 @@ function ItemRow({ o, lang, order, item, fmtAmt, shopName, onSaved, onApiError, 
   const { isArtisan, isBuyer } = order.viewer;
   return (
     <div style={{ display:"flex", gap:14, padding:"16px 0", borderTop:`1px solid ${COLORS.border}` }}>
-      <div style={{ width:64, height:64, flexShrink:0, background:COLORS.bgSoft, border:`1px solid ${COLORS.border}`, borderRadius:2, overflow:"hidden", display:"flex", alignItems:"center", justifyContent:"center", fontSize:26 }}>
-        {item.image ? <img src={assetUrl(item.image)} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : <span aria-hidden="true">{placeholderEmoji(item.category)}</span>}
+      <div style={{ position:"relative", width:64, height:64, flexShrink:0, border:`1px solid ${COLORS.border}`, borderRadius:2, overflow:"hidden" }}>
+        <ProductImage src={item.image} alt={name} />
       </div>
       <div style={{ flex:1, minWidth:0 }}>
         <div style={{ display:"flex", justifyContent:"space-between", gap:8, flexWrap:"wrap" }}>
@@ -213,7 +213,7 @@ export default function OrderDetail({ t, lang, orderId, fmtAmt, onBack, onApiErr
 
   const page = (children) => (
     <div style={{ background:COLORS.bg, minHeight:"100vh" }}>
-      <div className="a-page" style={{ maxWidth:820 }}>
+      <div className="a-page">
         <button type="button" className="a-shop-link" style={{ fontFamily:FONT_SANS, fontSize:13, marginBottom:16 }} onClick={onBack}>‹ {o.back}</button>
         {children}
       </div>
@@ -226,6 +226,8 @@ export default function OrderDetail({ t, lang, orderId, fmtAmt, onBack, onApiErr
   const shopName = order.shop?.shopName || order.shop?.ownerName || "—";
   const cancelled = order.status === "cancelled";
   const sectionTitle = { fontFamily:FONT_SERIF, fontSize:22, fontWeight:600, color:COLORS.ink, margin:"0 0 12px" };
+  const showShipping = (viewer.isArtisan || viewer.isBuyer) && (order.shippingAddress || order.payment?.paid);
+  const hasAside = Boolean(showShipping || order.payout);
   const row = { display:"flex", justifyContent:"space-between", fontFamily:FONT_SANS, fontSize:13, color:COLORS.ink, padding:"4px 0", fontVariantNumeric:"tabular-nums" };
 
   return page(
@@ -241,7 +243,9 @@ export default function OrderDetail({ t, lang, orderId, fmtAmt, onBack, onApiErr
           : o.notPaid}
       </p>
 
-      <section className="a-info-block" style={{ marginBottom:20 }} aria-label={o.status[order.status]}>
+      {/* >= 1024px: status + items left, shipping + payout right (when there is any). */}
+      <div className={`a-order-layout${hasAside ? " has-aside" : ""}`}>
+      <section className="a-info-block a-order-status" style={{ marginBottom:20 }} aria-label={o.status[order.status]}>
         {cancelled
           ? <p style={{ fontFamily:FONT_SANS, fontSize:14, color:COLORS.ink, margin:0 }}>{o.cancelledNote}</p>
           : <Timeline o={o} milestones={order.milestones} />}
@@ -270,12 +274,14 @@ export default function OrderDetail({ t, lang, orderId, fmtAmt, onBack, onApiErr
         )}
       </section>
 
-      {(viewer.isArtisan || viewer.isBuyer) && (order.shippingAddress || order.payment?.paid) && (
-        <ShippingAddress o={o} address={order.shippingAddress} forArtisan={viewer.isArtisan} />
+      {hasAside && (
+        <div className="a-order-aside">
+          {showShipping && <ShippingAddress o={o} address={order.shippingAddress} forArtisan={viewer.isArtisan} />}
+          {order.payout && <Payouts o={o} payout={order.payout} fmtAmt={fmtAmt} forArtisan={viewer.isArtisan} />}
+        </div>
       )}
-      {order.payout && <Payouts o={o} payout={order.payout} fmtAmt={fmtAmt} forArtisan={viewer.isArtisan} />}
 
-      <section className="a-info-block" style={{ marginBottom:20 }} aria-labelledby="order-items-title">
+      <section className="a-info-block a-order-items" style={{ marginBottom:20 }} aria-labelledby="order-items-title">
         <h2 id="order-items-title" style={sectionTitle}>{o.itemsTitle}</h2>
         {order.items.map((item) => (
           <ItemRow key={item.index} o={o} lang={lang} order={order} item={item} fmtAmt={fmtAmt} shopName={shopName}
@@ -288,6 +294,7 @@ export default function OrderDetail({ t, lang, orderId, fmtAmt, onBack, onApiErr
           <div style={{ ...row, fontWeight:700, fontSize:15 }}><span>{o.total}</span><span>{fmtAmt(order.total)}</span></div>
         </div>
       </section>
+      </div>
     </>
   );
 }

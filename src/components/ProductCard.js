@@ -1,7 +1,6 @@
 import { COLORS, FONT_SERIF, FONT_SANS } from "../theme";
-import { placeholderEmoji } from "../placeholders";
 import { artisanInfo } from "../artisanInfo";
-import { assetUrl } from "../api";
+import ProductImage from "./ProductImage";
 
 export default function ProductCard({
   product, nameMn, nameEn, lang, isSaved, onToggleSave, onOpen, price,
@@ -11,9 +10,7 @@ export default function ProductCard({
   const secondaryName = lang === "mn" ? nameEn : nameMn;
   const fullTitle = primaryName === secondaryName ? primaryName : `${primaryName} (${secondaryName})`;
   const artisanName = artisanInfo(product.artisan).displayName;
-  const photo = assetUrl(product.images?.[0]);
   const likeCount = product.likeCount || 0;
-  const icon = product.img || placeholderEmoji(product.category);
 
   const openCard = (e) => { e.preventDefault(); onOpen(product); };
 
@@ -21,13 +18,7 @@ export default function ProductCard({
     <div className="a-product-card">
       <div style={{ position:"relative", paddingBottom:"100%", background:COLORS.bgSoft }}>
         <a href="#" className="a-card-link" aria-label={fullTitle} onClick={openCard}>
-          {photo ? (
-            <img src={photo} alt={fullTitle} style={{ position:"absolute", inset:0, width:"100%", height:"100%", objectFit:"cover" }} />
-          ) : (
-            <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", fontSize:56 }}>
-              {icon}
-            </div>
-          )}
+          <ProductImage src={product.images?.[0]} alt={fullTitle} />
         </a>
         <button
           type="button"

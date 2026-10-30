@@ -67,7 +67,7 @@ export default function ArtisanProfileForm({ t, navigate, onSaved, onApiError })
 
   return (
     <div style={{ background:COLORS.bg, minHeight:"100vh" }}>
-      <div className="a-page" style={{ maxWidth:640 }}>
+      <div className="a-page a-page-form">
         <div style={{ marginBottom:16 }}>{back}</div>
         <div style={{ display:"flex", flexWrap:"wrap", alignItems:"center", justifyContent:"space-between", gap:12, marginBottom:6 }}>
           <h1 style={{ fontFamily:FONT_SERIF, fontSize:30, fontWeight:600, color:COLORS.ink }}>{s.title}</h1>

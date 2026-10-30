@@ -113,9 +113,9 @@ export default function CommissionBoard({ t, fmtAmt, canBid, onApiError, showToa
 
   return (
     <div style={{ background:COLORS.bg, minHeight:"100vh" }}>
-      <div className="a-page" style={{ maxWidth:860 }}>
+      <div className="a-page">
         <h1 style={{ fontFamily:FONT_SERIF, fontSize:28, fontWeight:600, color:COLORS.ink, marginBottom:10 }}>{c.boardTitle}</h1>
-        <p style={{ fontFamily:FONT_SANS, fontSize:14, color:COLORS.inkSoft, lineHeight:1.6, marginBottom:20 }}>{c.boardIntro}</p>
+        <p className="a-readable" style={{ fontFamily:FONT_SANS, fontSize:14, color:COLORS.inkSoft, lineHeight:1.6, marginBottom:20 }}>{c.boardIntro}</p>
 
         <div role="group" aria-label={t.auctionPage.categoryLabel} style={{ display:"flex", gap:8, overflowX:"auto", paddingBottom:4, marginBottom:24 }}>
           {[{ key:"", label:c.all }, ...t.productCategories].map((cat) => (
@@ -132,11 +132,11 @@ export default function CommissionBoard({ t, fmtAmt, canBid, onApiError, showToa
           <div className="a-callout" style={{ fontFamily:FONT_SANS, fontSize:13, color:COLORS.ink, marginBottom:20 }}>{c.noShop}</div>
         )}
 
-        <div aria-live="polite" style={{ display:"flex", flexDirection:"column", gap:16 }}>
+        <div aria-live="polite" className="a-card-grid">
           {requests === null ? (
-            <div style={{ fontFamily:FONT_SANS, fontSize:13, color:COLORS.inkSoft }}>…</div>
+            <div style={{ gridColumn:"1 / -1", fontFamily:FONT_SANS, fontSize:13, color:COLORS.inkSoft }}>…</div>
           ) : requests.length === 0 ? (
-            <div style={{ fontFamily:FONT_SANS, fontSize:14, color:COLORS.inkSoft }}>{loadFailed ? c.loadError : c.boardEmpty}</div>
+            <div style={{ gridColumn:"1 / -1", fontFamily:FONT_SANS, fontSize:14, color:COLORS.inkSoft }}>{loadFailed ? c.loadError : c.boardEmpty}</div>
           ) : requests.map((r) => (
             <RequestSummary key={r._id} t={t} request={r}>
               <div style={{ fontFamily:FONT_SANS, fontSize:12, fontWeight:700, color:COLORS.accentDark }}>{c.bidCount(r.bidCount)}</div>

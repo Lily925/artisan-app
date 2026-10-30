@@ -6,7 +6,7 @@ export default function Home({ lang, t, prods, savedItems, toggleSave, openProdu
 
   return (
     <div style={{ background:COLORS.bg, minHeight:"100vh" }}>
-      <section style={{ padding:"64px 24px", textAlign:"center", background:COLORS.bgSoft, borderBottom:`1px solid ${COLORS.border}` }}>
+      <section className="a-container" style={{ maxWidth:"none", paddingTop:64, paddingBottom:64, textAlign:"center", background:COLORS.bgSoft, borderBottom:`1px solid ${COLORS.border}` }}>
         <h1 style={{ fontFamily:FONT_SERIF, fontSize:"clamp(28px,5vw,48px)", fontWeight:600, color:COLORS.ink, maxWidth:720, margin:"0 auto 16px", lineHeight:1.15 }}>
           {home.heroTitle}
         </h1>
@@ -19,7 +19,7 @@ export default function Home({ lang, t, prods, savedItems, toggleSave, openProdu
         </div>
       </section>
 
-      <nav aria-label={home.categoriesAria} style={{ display:"flex", gap:10, overflowX:"auto", padding:"24px 24px 8px" }}>
+      <nav aria-label={home.categoriesAria} className="a-container" style={{ display:"flex", gap:10, overflowX:"auto", paddingTop:24, paddingBottom:8 }}>
         {t.productCategories.map((c) => (
           <button key={c.key} type="button" className="a-chip" onClick={() => openShop(c.key)}>
             {c.label}
@@ -27,10 +27,17 @@ export default function Home({ lang, t, prods, savedItems, toggleSave, openProdu
         ))}
       </nav>
 
-      <section style={{ padding:"16px 24px 56px" }}>
+      <section className="a-container" style={{ paddingTop:16, paddingBottom:56 }}>
         <h2 style={{ fontFamily:FONT_SERIF, fontSize:24, fontWeight:600, color:COLORS.ink, margin:"16px 0 20px" }}>
           {home.gridTitle}
         </h2>
+        {prods.length === 0 && (
+          <div className="a-info-block" role="status" style={{ textAlign:"center", padding:"40px 24px" }}>
+            <p style={{ fontFamily:FONT_SERIF, fontSize:22, color:COLORS.ink, marginBottom:8 }}>{t.shopPage.emptyAll}</p>
+            <p style={{ fontFamily:FONT_SANS, fontSize:14, color:COLORS.inkSoft, marginBottom:20 }}>{t.shopPage.emptySub}</p>
+            <button type="button" className="a-btn-primary" onClick={() => navigate("commission")}>{t.shopPage.bannerCtaCommission}</button>
+          </div>
+        )}
         <div className="a-product-grid">
           {prods.map((p) => {
             return (

@@ -20,7 +20,7 @@ export default function ShopOrders({ t, fmtAmt, navigate, openOrder, onApiError 
   const muted = { fontFamily:FONT_SANS, fontSize:14, color:COLORS.inkSoft };
   return (
     <div style={{ background:COLORS.bg, minHeight:"100vh" }}>
-      <div className="a-page" style={{ maxWidth:820 }}>
+      <div className="a-page">
         <button type="button" className="a-shop-link" style={{ fontFamily:FONT_SANS, fontSize:13, marginBottom:16 }} onClick={() => navigate("profile")}>‹ {o.back}</button>
         <h1 style={{ fontFamily:FONT_SERIF, fontSize:30, fontWeight:600, color:COLORS.ink, marginBottom:6 }}>{o.shopTitle}</h1>
         <p style={{ ...muted, fontSize:13, marginBottom:24 }}>{o.shopIntro}</p>

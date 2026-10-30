@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { COLORS, FONT_SERIF, FONT_SANS } from "../theme";
 import { materialsByCat } from "../data";
-import { placeholderEmoji } from "../placeholders";
 import { artisanInfo } from "../artisanInfo";
 import InstagramIcon from "./InstagramIcon";
-import { assetUrl } from "../api";
+import ArtisanAvatar from "./ArtisanAvatar";
+import ProductGallery from "./ProductGallery";
 import { bonusText, offeredTiers } from "../tiers";
 
 const TIER_DISPLAY = { basic: "Basic", story: "Story", patron: "Patron" };
@@ -24,9 +24,7 @@ export default function ProductDetail({ lang, t, selected, savedItems, toggleSav
   const description = selected.description?.trim() || "";
   const materials = materialsByCat[selected.category]?.[lang] || materialsByCat.crafts[lang];
   const categoryLabel = t.productCategories.find((c) => c.key === selected.category)?.label || selected.category;
-  const { ownerName, shopName, displayName, instagramHandle, instagramUrl, contactInfo } = artisanInfo(selected.artisan);
-  const photo = assetUrl(selected.images?.[0]);
-  const icon = placeholderEmoji(selected.category);
+  const { ownerName, shopName, displayName, instagramHandle, instagramUrl, contactInfo, photoUrl: shopPhotoUrl, avatarUrl } = artisanInfo(selected.artisan);
   const primaryName = lang === "mn" ? selected.title : selected.titleEn || selected.title;
 
   const tiers = offeredTiers(selected);
@@ -50,18 +48,7 @@ export default function ProductDetail({ lang, t, selected, savedItems, toggleSav
         </div>
 
         <div className="a-two-col">
-          <div>
-            <div style={{ aspectRatio:"1", background:COLORS.bgSoft, border:`1px solid ${COLORS.border}`, borderRadius:2, display:"flex", alignItems:"center", justifyContent:"center", fontSize:120, marginBottom:12, overflow:"hidden" }}>
-              {photo ? <img src={photo} alt={primaryName} style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : icon}
-            </div>
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10 }}>
-              {[0, 1, 2, 3].map((i) => (
-                <button key={i} type="button" className={`a-gallery-thumb${i === 0 ? " selected" : ""}`} aria-label={`${primaryName} ${i + 1}`}>
-                  {icon}
-                </button>
-              ))}
-            </div>
-          </div>
+          <ProductGallery images={selected.images} name={primaryName} labels={d} />
 
           <div>
             {isOwner && (
@@ -97,9 +84,7 @@ export default function ProductDetail({ lang, t, selected, savedItems, toggleSav
               {primaryName}
             </h1>
             <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom: instagramUrl || contactInfo ? 10 : 18 }}>
-              <div style={{ width:32, height:32, borderRadius:"50%", background:COLORS.accentSoft, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:700, color:COLORS.ink, flexShrink:0 }}>
-                {displayName[0] || "?"}
-              </div>
+              <ArtisanAvatar name={displayName} photoUrl={avatarUrl || shopPhotoUrl} size={32} />
               {shopName ? (
                 <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-start", minWidth:0 }}>
                   <button type="button" className="a-shop-link" onClick={() => openStorefront(selected.artisan)}

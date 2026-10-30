@@ -65,9 +65,16 @@ export const api = {
   login: (email, password) =>
     request("/auth/login", { method: "POST", body: { email, password } }),
 
+  // Own profile only (the server refuses any other id). data: { bio } as JSON, or a
+  // FormData with "photo" (File, JPG/PNG/WebP up to 2 MB) and/or "removePhoto" = "true".
+  getMe: () => request("/users/me", { auth: true }),
+  updateProfile: (userId, data) =>
+    request(`/users/${userId}`, { method: "PATCH", auth: true, ...(data instanceof FormData ? { formData: data } : { body: data }) }),
+
+  // Sent with the login token (if any) so an artisan also gets their own hidden products.
   getProducts: (category) =>
-    request(`/products${category ? `?category=${encodeURIComponent(category)}` : ""}`),
-  getProduct: (id) => request(`/products/${id}`),
+    request(`/products${category ? `?category=${encodeURIComponent(category)}` : ""}`, { auth: true }),
+  getProduct: (id) => request(`/products/${id}`, { auth: true }),
   // formData fields: title, titleEn, category, description, price (USD),
   // patronBonusMn, patronBonusEn (optional), photo (File)
   createProduct: (formData) => request("/products", { method: "POST", auth: true, formData }),
@@ -78,6 +85,8 @@ export const api = {
     request(`/artisans${category ? `?category=${encodeURIComponent(category)}` : ""}`),
   getMyArtisan: () => request("/artisans/me", { auth: true }),
   updateMyArtisan: (data) => request("/artisans/me", { method: "PUT", auth: true, body: data }),
+  // "Set up your shop" after an artisan signs up: { shopName, location, bio, instagramHandle }
+  setupMyShop: (data) => request("/artisans/me", { method: "POST", auth: true, body: data }),
 
   // Product page opened. Counted at most once per viewer per 24h (decided by the server).
   recordView: (id) => {

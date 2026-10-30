@@ -111,20 +111,20 @@ export default function MyCommissions({ t, fmtAmt, navigate, onApiError, showToa
 
   return (
     <div style={{ background:COLORS.bg, minHeight:"100vh" }}>
-      <div className="a-page" style={{ maxWidth:860 }}>
+      <div className="a-page">
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:16, flexWrap:"wrap", marginBottom:24 }}>
           <div>
             <h1 style={{ fontFamily:FONT_SERIF, fontSize:28, fontWeight:600, color:COLORS.ink, marginBottom:10 }}>{c.mineTitle}</h1>
-            <p style={{ fontFamily:FONT_SANS, fontSize:14, color:COLORS.inkSoft, lineHeight:1.6, margin:0 }}>{c.mineIntro}</p>
+            <p className="a-readable" style={{ fontFamily:FONT_SANS, fontSize:14, color:COLORS.inkSoft, lineHeight:1.6, margin:0 }}>{c.mineIntro}</p>
           </div>
           <button type="button" className="a-btn-outline" onClick={() => navigate("commission")}>{c.newRequest}</button>
         </div>
 
-        <div aria-live="polite" style={{ display:"flex", flexDirection:"column", gap:16 }}>
+        <div aria-live="polite" className="a-card-grid">
           {requests === null ? (
-            <div style={{ fontFamily:FONT_SANS, fontSize:13, color:COLORS.inkSoft }}>…</div>
+            <div style={{ gridColumn:"1 / -1", fontFamily:FONT_SANS, fontSize:13, color:COLORS.inkSoft }}>…</div>
           ) : requests.length === 0 ? (
-            <div style={{ fontFamily:FONT_SANS, fontSize:14, color:COLORS.inkSoft }}>{loadFailed ? c.loadError : c.mineEmpty}</div>
+            <div style={{ gridColumn:"1 / -1", fontFamily:FONT_SANS, fontSize:14, color:COLORS.inkSoft }}>{loadFailed ? c.loadError : c.mineEmpty}</div>
           ) : requests.map((r) => {
             const open = r.status === "open";
             const acceptedBid = r.bids.find((b) => b.status === "accepted");

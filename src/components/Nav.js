@@ -1,5 +1,7 @@
 import { COLORS, FONT_SERIF } from "../theme";
 
+const LOCALES = [["en", "$"], ["mn", "₮"], ["ko", "₩"]];
+
 function CountBadge({ count }) {
   return (
     <span aria-hidden="true" style={{ position:"absolute", top:2, right:2, background:COLORS.accentDark, color:"#fff", borderRadius:"50%", width:16, height:16, fontSize:9, fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center" }}>
@@ -9,14 +11,14 @@ function CountBadge({ count }) {
 }
 
 export default function Nav({
-  lang, setLang, currency, setCurrency, searchQuery, setSearchQuery, onSearchSubmit,
+  lang, setLang, searchQuery, setSearchQuery, onSearchSubmit,
   cartCount, wishlistCount, currentUser, navigate, t,
 }) {
   const nav = t.nav;
 
   return (
     <header style={{ position:"sticky", top:0, zIndex:200, background:COLORS.card, borderBottom:`1px solid ${COLORS.border}` }}>
-      <div className="a-nav-row">
+      <div className="a-container a-nav-row">
         <a
           href="#"
           onClick={(e) => { e.preventDefault(); navigate("home"); }}
@@ -37,18 +39,11 @@ export default function Nav({
           />
         </form>
 
-        <div role="group" aria-label={nav.currencyAria} className="a-nav-group">
-          {["USD","MNT","KRW"].map((code) => (
-            <button key={code} type="button" className={`a-nav-link${currency===code?" active":""}`} aria-pressed={currency===code} onClick={() => setCurrency(code)}>
-              {code}
-            </button>
-          ))}
-        </div>
-
-        <div role="group" aria-label={nav.langAria} className="a-nav-group">
-          {["mn","en","ko"].map((code) => (
-            <button key={code} type="button" className={`a-nav-link${lang===code?" active":""}`} aria-pressed={lang===code} onClick={() => setLang(code)}>
-              {code.toUpperCase()}
+        {/* One switcher: language + the currency shown with it (EN $, MN ₮, KO ₩). */}
+        <div role="group" aria-label={nav.langAria} className="a-nav-group a-locale-switch">
+          {LOCALES.map(([code, symbol]) => (
+            <button key={code} type="button" className={`a-locale-btn${lang===code?" active":""}`} aria-pressed={lang===code} onClick={() => setLang(code)}>
+              {code.toUpperCase()} <span aria-hidden="true" className="a-locale-sym">{symbol}</span>
             </button>
           ))}
         </div>
