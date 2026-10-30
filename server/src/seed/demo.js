@@ -2,6 +2,7 @@
 // noon_handmade_ dashboard, described in demoData.js. Remove it before real use.
 //   node src/seed/demo.js            add (replaces any earlier demo data)
 //   node src/seed/demo.js --remove   remove
+// With NODE_ENV=production, adding refuses to run unless --allow-production is passed.
 // Touches only demo records; real users, products and orders are left alone.
 require("dotenv").config();
 const crypto = require("crypto");
@@ -170,6 +171,8 @@ async function addDemoData() {
 module.exports = { addDemoData, removeDemoData };
 
 if (require.main === module) {
+  // Removing demo data is always allowed; adding it is refused in production (see productionGuard).
+  if (!process.argv.includes("--remove")) require("./productionGuard").refuseInProduction("add demo data");
   connectDB()
     .then(() => (process.argv.includes("--remove") ? removeDemoData() : addDemoData()))
     .then(() => mongoose.disconnect())

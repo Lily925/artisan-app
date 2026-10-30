@@ -32,11 +32,13 @@ function savedLang() {
 }
 
 const AVATAR_BY_ROLE = { admin: "🧑‍💼", artisan: "👩‍🎨", buyer: "🛍" };
-const DEMO_ACCOUNTS = [
+// One-click demo logins on the login page: development only. Production builds leave them
+// (and the seed password) out of the bundle; the API refuses that password in production anyway.
+const DEMO_ACCOUNTS = process.env.NODE_ENV !== "production" ? [
   { name: "Admin", email: "admin@artisan.mn", password: "artisan123" },
   { name: "Narantsetseg", email: "narantsetseg@artisan.mn", password: "artisan123" },
   { name: "Buyer Demo", email: "buyer@artisan.mn", password: "artisan123" },
-];
+] : [];
 
 function LoginPage({ onLogin, onRegister, lang }) {
   const [tab, setTab] = useState("login");
@@ -161,6 +163,7 @@ function LoginPage({ onLogin, onRegister, lang }) {
           </div>
         </div>
 
+        {DEMO_ACCOUNTS.length > 0 && (
         <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:2, padding:"16px 18px" }}>
           <div style={{ fontSize:11, color:COLORS.inkSoft, textTransform:"uppercase", letterSpacing:1.5, marginBottom:10, fontWeight:700 }}>{lbl.demo}</div>
           {DEMO_ACCOUNTS.map(u => (
@@ -174,6 +177,7 @@ function LoginPage({ onLogin, onRegister, lang }) {
             </button>
           ))}
         </div>
+        )}
       </div>
       </div>
     </div>

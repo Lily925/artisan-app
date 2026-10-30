@@ -1,19 +1,21 @@
+const { SEED_PASSWORD } = require("../config/constants");
+
 // Starting data for `npm run seed` (add-only, see seed.js). Password for every seeded
 // account is "artisan123". The demo artisans (Narantsetseg, Enkhjargal, ...) are accounts
 // only: their emoji placeholder products were removed on 2026-10-15 and must not come back.
 // Every seeded product needs a real photo (seed.js skips any without one).
 
 const users = [
-  { name: "Admin", email: "admin@artisan.mn", password: "artisan123", role: "admin" },
-  { name: "Buyer Demo", email: "buyer@artisan.mn", password: "artisan123", role: "buyer" },
-  { name: "Narantsetseg", email: "narantsetseg@artisan.mn", password: "artisan123", role: "artisan" },
-  { name: "Enkhjargal", email: "enkhjargal@artisan.mn", password: "artisan123", role: "artisan" },
-  { name: "Boldbaatar", email: "boldbaatar@artisan.mn", password: "artisan123", role: "artisan" },
-  { name: "Oyuntsetseg", email: "oyuntsetseg@artisan.mn", password: "artisan123", role: "artisan" },
-  { name: "Gantulga", email: "gantulga@artisan.mn", password: "artisan123", role: "artisan" },
-  { name: "Tserenpuntsag", email: "tserenpuntsag@artisan.mn", password: "artisan123", role: "artisan" },
+  { name: "Admin", email: "admin@artisan.mn", password: SEED_PASSWORD, role: "admin" },
+  { name: "Buyer Demo", email: "buyer@artisan.mn", password: SEED_PASSWORD, role: "buyer" },
+  { name: "Narantsetseg", email: "narantsetseg@artisan.mn", password: SEED_PASSWORD, role: "artisan" },
+  { name: "Enkhjargal", email: "enkhjargal@artisan.mn", password: SEED_PASSWORD, role: "artisan" },
+  { name: "Boldbaatar", email: "boldbaatar@artisan.mn", password: SEED_PASSWORD, role: "artisan" },
+  { name: "Oyuntsetseg", email: "oyuntsetseg@artisan.mn", password: SEED_PASSWORD, role: "artisan" },
+  { name: "Gantulga", email: "gantulga@artisan.mn", password: SEED_PASSWORD, role: "artisan" },
+  { name: "Tserenpuntsag", email: "tserenpuntsag@artisan.mn", password: SEED_PASSWORD, role: "artisan" },
   // real shop: noon_handmade_ (owner: Bolorsaran)
-  { name: "Bolorsaran", email: "noon.handmade@example.com", password: "artisan123", role: "artisan" },
+  { name: "Bolorsaran", email: "noon.handmade@example.com", password: SEED_PASSWORD, role: "artisan" },
 ];
 
 // specialty/bio keyed by the artisan's user email, filled in after users are created

@@ -7,6 +7,7 @@
 //   - never creates a product without a photo (no emoji placeholders).
 // Fake dashboard data is separate and DEMO-ONLY: `npm run seed:demo` (see demo.js).
 require("dotenv").config();
+require("./productionGuard").refuseInProduction("seed demo accounts (password: artisan123)");
 const bcrypt = require("bcryptjs");
 const mongoose = require("mongoose");
 const connectDB = require("../config/db");

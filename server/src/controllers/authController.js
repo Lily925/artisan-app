@@ -1,6 +1,7 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
+const { SEED_PASSWORD } = require("../config/constants");
 
 function signToken(user) {
   return jwt.sign(
@@ -15,6 +16,9 @@ const str = (v) => (typeof v === "string" ? v : null);
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PASSWORD_MIN = 8;
 const PASSWORD_MAX = 128; // bcrypt only uses the first 72 bytes; this also bounds hashing work
+// In production the seed password (public, it's in the repo) is refused, so the seeded demo
+// accounts can't be used there until their passwords are changed (npm run set-password).
+const seedPasswordBlocked = (password) => process.env.NODE_ENV === "production" && password === SEED_PASSWORD;
 // The only roles a client may pick when signing up. "admin" (or anything else, including
 // non-strings) is refused; admins are created on the server only (seed / database).
 const SIGNUP_ROLES = ["buyer", "artisan"];
@@ -40,6 +44,7 @@ async function signup(req, res) {
   if (password.length < PASSWORD_MIN || password.length > PASSWORD_MAX) {
     return res.status(400).json({ error: `Password must be ${PASSWORD_MIN}-${PASSWORD_MAX} characters` });
   }
+  if (seedPasswordBlocked(password)) return res.status(400).json({ error: "Please choose a different password", code: "WEAK_PASSWORD" });
 
   const existing = await User.findOne({ email });
   if (existing) return res.status(409).json({ error: "Email already registered" });
@@ -58,6 +63,8 @@ async function login(req, res) {
   if (!email || !password || email.length > 254 || password.length > PASSWORD_MAX) {
     return res.status(400).json({ error: "email and password are required" });
   }
+
+  if (seedPasswordBlocked(password)) return res.status(401).json({ error: "Invalid email or password" });
 
   const user = await User.findOne({ email });
   if (!user) return res.status(401).json({ error: "Invalid email or password" });
