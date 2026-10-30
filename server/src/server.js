@@ -1,6 +1,11 @@
 require("dotenv").config();
+// Check the environment before anything else is loaded (exits with a clear message).
+const { checkEnv } = require("./config/env");
+const { isProduction, allowedOrigins } = checkEnv();
+
 const express = require("express");
 const cors = require("cors");
+const mongoose = require("mongoose");
 const connectDB = require("./config/db");
 const securityHeaders = require("./middleware/securityHeaders");
 const { UPLOAD_ROOT, STORAGE } = require("./utils/imageStorage");
@@ -14,24 +19,18 @@ const commissionRoutes = require("./routes/commissionRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 const userRoutes = require("./routes/userRoutes");
 
-// Refuse to start with a missing or guessable JWT secret: anyone who knows it can sign
-// tokens for any account. (The value itself is never printed.)
-if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
-  console.error("JWT_SECRET must be set in server/.env and be at least 32 characters long.");
-  process.exit(1);
-}
-
 const app = express();
 app.disable("x-powered-by");
-// Behind a reverse proxy / load balancer (most hosts), set TRUST_PROXY=1 so req.ip (used by
-// the rate limits) is the client's address and not the proxy's.
-if (process.env.TRUST_PROXY) app.set("trust proxy", Number(process.env.TRUST_PROXY) || process.env.TRUST_PROXY);
-app.use(securityHeaders);
+// Behind a reverse proxy / load balancer (Render and most hosts) req.ip must be the client's
+// address, not the proxy's, or the rate limits would lump every visitor together.
+// TRUST_PROXY = number of proxy hops; defaults to 1 in production, off in development.
+const trustProxy = process.env.TRUST_PROXY ?? (isProduction ? "1" : "");
+if (trustProxy) app.set("trust proxy", Number(trustProxy) || trustProxy);
+app.use(securityHeaders({ isProduction }));
 
-// Only the app's own frontend(s) may call the API from a browser. CORS_ORIGINS is a
-// comma-separated list; defaults to the local dev frontend. Requests without an Origin
-// header (curl, server-to-server) aren't affected by CORS.
-const allowedOrigins = (process.env.CORS_ORIGINS || "http://localhost:3000").split(",").map((o) => o.trim()).filter(Boolean);
+// Only the app's own frontend may call the API from a browser: CLIENT_URL, plus the local
+// dev frontend outside production (see config/env.js). Requests without an Origin header
+// (curl, server-to-server, health checks) aren't affected by CORS.
 app.use(cors({
   origin: (origin, cb) => cb(null, !origin || allowedOrigins.includes(origin)),
   allowedHeaders: ["Content-Type", "Authorization", "X-Viewer-Session"],
@@ -48,7 +47,11 @@ app.use("/uploads", express.static(UPLOAD_ROOT, {
   setHeaders: (res) => res.set("X-Content-Type-Options", "nosniff"),
 }));
 
-app.get("/api/health", (req, res) => res.json({ ok: true }));
+// Health check (Render's "Health Check Path": /health). 503 while the database is unreachable.
+app.get(["/health", "/api/health"], (req, res) => {
+  const db = mongoose.connection.readyState === 1;
+  res.status(db ? 200 : 503).json({ ok: db, db: db ? "connected" : "disconnected" });
+});
 app.use("/api/auth", authRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/artisans", artisanRoutes);
@@ -75,11 +78,12 @@ app.use((err, req, res, next) => {
   res.status(status).json({ error: status === 500 ? "Something went wrong. Please try again." : err.message });
 });
 
-const PORT = process.env.PORT || 5000;
+// Render (and most hosts) set PORT; 5000 is the local default.
+const PORT = Number(process.env.PORT) || 5000;
 
 connectDB()
   .then(() => {
-    app.listen(PORT, () => console.log(`Artisan API listening on port ${PORT} (photo storage: ${STORAGE === "cloudinary" ? "Cloudinary" : "local disk, development only"})`));
+    app.listen(PORT, () => console.log(`Artisan API listening on port ${PORT} (${isProduction ? "production" : "development"}; photo storage: ${STORAGE === "cloudinary" ? "Cloudinary" : "local disk, development only"}; allowed origins: ${allowedOrigins.join(", ")})`));
   })
   .catch((err) => {
     console.error("Failed to connect to MongoDB:", err.message);
