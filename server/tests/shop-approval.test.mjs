@@ -31,12 +31,14 @@ const tag = crypto.randomBytes(4).toString("hex");
 const pw = crypto.randomBytes(12).toString("hex");
 const email = (k) => `shop-test-${k}-${tag}@test.invalid`;
 const login = async (k) => (await call("/auth/login", { method: "POST", json: { email: email(k), password: pw } })).body.token;
-const productForm = () => {
+// withPhoto false: an edit that keeps the current photos.
+const productForm = ({ withPhoto = true, price = "25" } = {}) => {
   const f = new FormData();
-  for (const [k, v] of Object.entries({ title: "Туршилт", titleEn: `Shop Test ${tag}`, category: "textile", price: "25" })) f.append(k, v);
-  f.append("photos", new Blob([PNG()], { type: "image/png" }), "1.png");
+  for (const [k, v] of Object.entries({ title: "Туршилт", titleEn: `Shop Test ${tag}`, category: "textile", price })) f.append(k, v);
+  if (withPhoto) f.append("photos", new Blob([PNG()], { type: "image/png" }), "1.png");
   return f;
 };
+const notApproved = (r) => r.status === 403 && r.body.code === "SHOP_NOT_APPROVED" && /approved/.test(r.body.error);
 const ids = (list) => list.map((x) => String(x._id ?? x.id));
 
 await connectDB();
@@ -72,7 +74,7 @@ try {
   r = await call("/artisans/me", { method: "PUT", token: artisanToken, json: { location: "Arkhangai", instagramHandle: "nar_esgii" } });
   check("pending artisan can edit the shop profile", r.status === 200 && r.body.location === "Arkhangai", `${r.status} ${r.body.error || ""}`);
   r = await call("/products", { method: "POST", token: artisanToken, form: productForm() });
-  check("pending artisan can't publish a product → 403 SHOP_NOT_APPROVED", r.status === 403 && r.body.code === "SHOP_NOT_APPROVED", `${r.status} ${r.body.code}`);
+  check("pending artisan can't publish a product → 403 SHOP_NOT_APPROVED with a clear message", notApproved(r), `${r.status} ${r.body.code} ${r.body.error}`);
   check("…and nothing was created", !(await Product.exists({ titleEn: `Shop Test ${tag}` })));
   check("pending shop not in the public list", !ids((await call("/artisans")).body).includes(shopId));
   check("pending shop page → 404 (by id)", (await call(`/artisans/${shopId}`)).status === 404);
@@ -124,13 +126,25 @@ try {
   check("its products are hidden from the public list", !ids((await call("/products")).body).includes(created.productId));
   check("its product page → 404", (await call(`/products/${created.productId}`)).status === 404);
   check("its products can't be added to a cart → 404", (await call("/cart", { method: "POST", token: buyerToken, json: { productId: created.productId, tier: "basic" } })).status === 404);
-  check("suspended artisan can't publish", (await call("/products", { method: "POST", token: artisanToken, form: productForm() })).status === 403);
+  check("suspended artisan can't publish", notApproved(await call("/products", { method: "POST", token: artisanToken, form: productForm() })));
+  r = await call(`/products/${created.productId}`, { method: "PUT", token: artisanToken, form: productForm({ withPhoto: false, price: "30" }) });
+  check("suspended artisan can't edit their product → 403 SHOP_NOT_APPROVED", notApproved(r), `${r.status} ${r.body.code}`);
+  r = await call(`/products/${created.productId}`, { method: "PUT", token: adminToken, form: productForm({ withPhoto: false, price: "31" }) });
+  check("admin can still edit a suspended shop's product", r.status === 200 && r.body.pricingTiers?.basic?.price === 31, `${r.status} ${r.body.error || ""}`);
   check("suspended artisan still sees their own product", (await call(`/products/${created.productId}`, { token: artisanToken })).status === 200);
   r = await call("/admin/shops", { token: adminToken });
   check("admin's all-shops list shows it suspended with the reason", r.body.find?.((s) => s.id === shopId)?.statusReason === "Reported listing.");
   r = await call(`/admin/shops/${shopId}/unsuspend`, { method: "PUT", token: adminToken });
   check("admin unsuspends", r.status === 200 && r.body.status === "approved");
   check("product public again", ids((await call("/products")).body).includes(created.productId));
+  r = await call(`/products/${created.productId}`, { method: "PUT", token: artisanToken, form: productForm({ withPhoto: false, price: "32" }) });
+  check("approved artisan can edit their product again", r.status === 200 && r.body.pricingTiers?.basic?.price === 32, `${r.status} ${r.body.error || ""}`);
+
+  // ── an approved shop put back to pending (e.g. by hand in the database) ──
+  await Artisan.updateOne({ _id: shopId }, { $set: { status: "pending" } });
+  check("pending artisan can't edit an existing product", notApproved(await call(`/products/${created.productId}`, { method: "PUT", token: artisanToken, form: productForm({ withPhoto: false }) })));
+  check("pending artisan can't add a product", notApproved(await call("/products", { method: "POST", token: artisanToken, form: productForm() })));
+  await Artisan.updateOne({ _id: shopId }, { $set: { status: "approved" } });
 
   // ── shops from before approval (no status) keep working ──
   check("older shop without a status is public", ids((await call("/artisans")).body).includes(String(legacyShop._id)));

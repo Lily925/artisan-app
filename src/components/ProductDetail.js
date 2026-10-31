@@ -9,7 +9,7 @@ import { bonusText, offeredTiers } from "../tiers";
 
 const TIER_DISPLAY = { basic: "Basic", story: "Story", patron: "Patron" };
 
-export default function ProductDetail({ lang, t, selected, savedItems, toggleSave, addToCart, fmtAmt, navigate, openStorefront, openArtisanProfile, currentUserId, onEdit, onDelete }) {
+export default function ProductDetail({ lang, t, selected, savedItems, toggleSave, addToCart, fmtAmt, navigate, openStorefront, openArtisanProfile, currentUserId, canEdit = true, onEdit, onDelete }) {
   const [selectedTier, setSelectedTier] = useState("basic");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -57,7 +57,7 @@ export default function ProductDetail({ lang, t, selected, savedItems, toggleSav
                   <div style={{ display:"flex", flexWrap:"wrap", alignItems:"center", justifyContent:"space-between", gap:10 }}>
                     <span style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:700, color:COLORS.ink }}>{ap.yourProduct}</span>
                     <div style={{ display:"flex", gap:8 }}>
-                      <button type="button" className="a-btn-outline" style={{ padding:"8px 16px", minHeight:40 }} onClick={() => onEdit(selected)}>{ap.edit}</button>
+                      {canEdit && <button type="button" className="a-btn-outline" style={{ padding:"8px 16px", minHeight:40 }} onClick={() => onEdit(selected)}>{ap.edit}</button>}
                       <button type="button" className="a-btn-outline" style={{ padding:"8px 16px", minHeight:40, color:"#B3261E", borderColor:"#B3261E" }} onClick={() => setConfirmingDelete(true)}>{ap.delete}</button>
                     </div>
                   </div>

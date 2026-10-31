@@ -37,3 +37,34 @@ test('signing up as an artisan asks for the shop and sends only the chosen role'
   const [, init] = global.fetch.mock.calls.find(([url]) => String(url).endsWith('/auth/signup'));
   expect(JSON.parse(init.body)).toEqual({ name: 'Nara', email: 'nara@example.com', password: 'long-enough-pw', role: 'artisan', shopName: 'Нар Эсгий', shopDescription: 'Felt slippers' });
 });
+
+// A logged-in artisan whose shop is still pending: answers each API call by path.
+function loginPendingArtisan() {
+  localStorage.setItem('artisan-token', 'token');
+  localStorage.setItem('artisan-user', JSON.stringify({ id: 'u1', name: 'Nara', email: 'nara@example.com', role: 'artisan' }));
+  localStorage.setItem('artisan-lang', 'en');
+  const byPath = {
+    '/artisans/me': { _id: 'a1', shopName: 'Nar Esgii', status: 'pending', statusReason: '', user: { _id: 'u1', name: 'Nara' } },
+    '/users/me': { id: 'u1', name: 'Nara', email: 'nara@example.com', role: 'artisan', avatarUrl: '', bio: '' },
+    '/cart': { items: [] },
+  };
+  global.fetch.mockImplementation((url) => {
+    const path = new URL(String(url)).pathname.replace(/^\/api/, '');
+    if (!String(url).includes('/api/')) return new Promise(() => {}); // exchange rates
+    return Promise.resolve({ ok: true, status: 200, json: async () => byPath[path] ?? [] });
+  });
+}
+
+test('a pending artisan sees the approval banner and no Add product buttons', async () => {
+  loginPendingArtisan();
+  try {
+    render(<App />);
+    expect(await screen.findByText('Your shop is waiting for approval')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Nara' })); // profile
+    expect(await screen.findByRole('heading', { name: 'My products' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '+ Add product' })).not.toBeInTheDocument();
+    expect(screen.getByText('You can add products once your shop is approved.')).toBeInTheDocument(); // onboarding step
+  } finally {
+    localStorage.clear();
+  }
+});

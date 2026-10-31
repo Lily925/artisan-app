@@ -69,18 +69,25 @@ function readProductFields(body) {
   return { fields, problems };
 }
 
+const SHOP_NOT_APPROVED = { error: "Your shop must be approved by an admin before you can add or edit products", code: "SHOP_NOT_APPROVED" };
+
 // Loads a product the caller may change: its own artisan, or an admin. Sends 404/403
-// and returns null otherwise.
-async function findOwnProduct(req, res) {
+// and returns null otherwise. With mustBeLive, an owning artisan's shop must also be
+// approved (admins are exempt).
+async function findOwnProduct(req, res, { mustBeLive = false } = {}) {
   if (!mongoose.isValidObjectId(req.params.id)) { res.status(404).json({ error: "Product not found" }); return null; }
   const [product, artisan] = await Promise.all([
     Product.findById(req.params.id),
-    req.user.role === "artisan" ? Artisan.findOne({ user: req.user.id }).select("_id") : null,
+    req.user.role === "artisan" ? Artisan.findOne({ user: req.user.id }).select("_id status") : null,
   ]);
   if (!product) { res.status(404).json({ error: "Product not found" }); return null; }
   const isOwner = Boolean(artisan && product.artisan.equals(artisan._id));
   if (!isOwner && req.user.role !== "admin") {
     res.status(403).json({ error: "You can only change your own products" });
+    return null;
+  }
+  if (mustBeLive && isOwner && req.user.role !== "admin" && !isShopLive(artisan)) {
+    res.status(403).json(SHOP_NOT_APPROVED);
     return null;
   }
   return product;
@@ -129,7 +136,7 @@ async function createProduct(req, res) {
   }
   // Pending / rejected / suspended shops can't publish.
   if (!isShopLive(artisan)) {
-    return res.status(403).json({ error: "Your shop must be approved before you can add products", code: "SHOP_NOT_APPROVED" });
+    return res.status(403).json(SHOP_NOT_APPROVED);
   }
 
   const { fields, problems } = readProductFields(req.body);
@@ -160,7 +167,7 @@ async function createProduct(req, res) {
 // new "photos" files. Without imageOrder, uploaded photos replace all current ones, and
 // with no photos at all the current ones stay.
 async function updateProduct(req, res) {
-  const product = await findOwnProduct(req, res);
+  const product = await findOwnProduct(req, res, { mustBeLive: true });
   if (!product) return;
 
   const { fields, problems } = readProductFields(req.body);

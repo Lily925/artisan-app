@@ -72,7 +72,7 @@ function OrderRow({ first, title, sub, amount, onOpen }) {
 // Buyers: stats, order history, liked items.
 export default function ProfilePage({
   t, lang, user, emoji, products, savedItems, toggleSave, openProduct, fmtBasic, fmtAmt,
-  cartLines, orders, openOrder, navigate, logout, onUpdated, onApiError, shopSetupNeeded, shopLive = true,
+  cartLines, orders, openOrder, navigate, logout, onUpdated, onApiError, shopSetupNeeded, shopLive = false,
 }) {
   const pp = t.profilePage;
   const o = t.orders;
@@ -149,7 +149,7 @@ export default function ProfilePage({
                 <div style={{ marginTop:20, display:"flex", gap:8, justifyContent:"center", flexWrap:"wrap" }}>
                   <button type="button" className="a-btn-primary" style={actionBtn} onClick={() => navigate("dashboard")}>{t.dashboard.open}</button>
                   <button type="button" className="a-btn-primary" style={actionBtn} onClick={() => navigate("shop-orders")}>{o.shopOpen}</button>
-                  <button type="button" className="a-btn-primary" style={actionBtn} onClick={() => navigate("add-product")}>{t.addProduct.open}</button>
+                  {shopLive && <button type="button" className="a-btn-primary" style={actionBtn} onClick={() => navigate("add-product")}>{t.addProduct.open}</button>}
                   <button type="button" className="a-btn-outline" style={actionBtn} onClick={() => navigate("shop-settings")}>{t.shopSettings.open}</button>
                   <button type="button" className="a-btn-outline" style={actionBtn} onClick={() => navigate("commission-board")}>{t.commissions.boardOpen}</button>
                 </div>
@@ -180,7 +180,7 @@ export default function ProfilePage({
             </section>
 
             {isArtisan && (
-              <Section title={pp.myProducts} action={linkBtn(t.addProduct.open, () => navigate("add-product"))}>
+              <Section title={pp.myProducts} action={shopLive && linkBtn(t.addProduct.open, () => navigate("add-product"))}>
                 {myProducts.length === 0
                   ? <p style={muted}>{pp.myProductsEmpty}</p>
                   : <div className="a-product-grid">{myProducts.map(card)}</div>}

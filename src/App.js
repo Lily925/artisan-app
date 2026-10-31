@@ -276,8 +276,9 @@ export default function App() {
   const [storeArtisan, setStoreArtisan] = useState(null); // artisan whose storefront is open
   // An artisan account without a shop profile yet (new sign-up): sent to "Set up your shop".
   const [shopSetupNeeded, setShopSetupNeeded] = useState(false);
-  // Own shop's approval: { status, reason }. Only "approved" shops are public and can publish.
-  const [shopStatus, setShopStatus] = useState({ status: "approved", reason: "" });
+  // Own shop's approval: { status, reason }; status null = not loaded yet. Only "approved"
+  // shops are public and can add or edit products (the server enforces this too).
+  const [shopStatus, setShopStatus] = useState({ status: null, reason: "" });
   const [profileArtisan, setProfileArtisan] = useState(null); // artisan whose personal profile is open
   // Pages to return to from the storefront / artisan-profile pages ("Back" pops one).
   const [backStack, setBackStack] = useState([]);
@@ -373,7 +374,7 @@ export default function App() {
           });
       } else setShopSetupNeeded(false);
     }
-    else { setCart(null); setOrders([]); setSavedItems([]); setShopSetupNeeded(false); setShopStatus({ status: "approved", reason: "" }); }
+    else { setCart(null); setOrders([]); setSavedItems([]); setShopSetupNeeded(false); setShopStatus({ status: null, reason: "" }); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUserId]);
 
@@ -400,9 +401,17 @@ export default function App() {
   const showShopSetup = currentUser.role === "artisan" && shopSetupNeeded && SHOP_SETUP_GATED.includes(page);
   const currentUserAvatar = AVATAR_BY_ROLE[currentUser.role] || "🙂";
   const isArtisan = currentUser.role === "artisan";
-  const shopLive = !isArtisan || shopSetupNeeded || shopStatus.status === "approved";
+  const shopLive = isArtisan && !shopSetupNeeded && shopStatus.status === "approved";
 
-  const navigate = (pg) => { setPage(pg); setPageKey(k => k + 1); };
+  // An admin may have approved / suspended the shop meanwhile: re-check on the shop's own pages.
+  const refreshShopStatus = () =>
+    api.getMyArtisan()
+      .then((a) => setShopStatus({ status: a.status || "approved", reason: a.statusReason || "" }))
+      .catch((err) => { if (err.status === 401) handleApiError(err); });
+  const navigate = (pg) => {
+    if (isArtisan && !shopSetupNeeded && ["profile", "add-product", "edit-product", "shop-settings"].includes(pg)) refreshShopStatus();
+    setPage(pg); setPageKey(k => k + 1);
+  };
   // Heart = like. Flip the heart immediately, then take liked state + count from the server.
   const toggleSave = (id, e) => {
     if (e) e.stopPropagation();
@@ -575,7 +584,7 @@ export default function App() {
           lang={lang} t={t} selected={selected} savedItems={savedItems}
           toggleSave={toggleSave} addToCart={addToCart} fmtAmt={fmtAmt}
           navigate={navigate} openStorefront={openStorefront} openArtisanProfile={openArtisanProfile}
-          currentUserId={currentUser.id}
+          currentUserId={currentUser.id} canEdit={shopLive}
           onEdit={() => { navigate("edit-product"); window.scrollTo(0, 0); }}
           onDelete={deleteOwnProduct}
         />
@@ -648,12 +657,12 @@ export default function App() {
 
       {page==="shop-settings" && currentUser.role==="artisan" && !showShopSetup && (
         <ArtisanProfileForm
-          key={pageKey} t={t} navigate={navigate} onApiError={handleApiError}
+          key={pageKey} t={t} navigate={navigate} onApiError={handleApiError} canAddProducts={shopLive}
           onSaved={() => { showToast(t.shopSettings.saved); refreshProducts(); }}
         />
       )}
 
-      {page==="add-product" && isArtisan && !showShopSetup && !shopLive && (
+      {["add-product", "edit-product"].includes(page) && isArtisan && !showShopSetup && !shopLive && shopStatus.status && (
         <div className="a-page page">
           <p role="status" style={{ fontFamily:FONT_SANS, fontSize:15, color:COLORS.ink, marginTop:12 }}>{t.shopStatus.cantPublish}</p>
           <button type="button" className="a-btn-outline" style={{ marginTop:16 }} onClick={() => navigate("profile")}>{t.profile}</button>
@@ -672,7 +681,7 @@ export default function App() {
         />
       )}
 
-      {page==="edit-product" && !showShopSetup && selected && selected.artisan?.user?._id === currentUser.id && (
+      {page==="edit-product" && shopLive && !showShopSetup && selected && selected.artisan?.user?._id === currentUser.id && (
         <AddProductForm
           key={pageKey} t={t} product={selected} rateMnt={rates.MNT} onApiError={handleApiError}
           onBack={() => navigate("detail")}

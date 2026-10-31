@@ -14,7 +14,7 @@ const toForm = (a) => ({
 
 // Lets a logged-in artisan edit the self-service parts of their own shop profile.
 // The API only ever touches the caller's own record (PUT /api/artisans/me).
-export default function ArtisanProfileForm({ t, navigate, onSaved, onApiError }) {
+export default function ArtisanProfileForm({ t, navigate, onSaved, onApiError, canAddProducts = false }) {
   const s = t.shopSettings;
   const [artisan, setArtisan] = useState(null);
   const [form, setForm] = useState(toForm({}));
@@ -71,9 +71,11 @@ export default function ArtisanProfileForm({ t, navigate, onSaved, onApiError })
         <div style={{ marginBottom:16 }}>{back}</div>
         <div style={{ display:"flex", flexWrap:"wrap", alignItems:"center", justifyContent:"space-between", gap:12, marginBottom:6 }}>
           <h1 style={{ fontFamily:FONT_SERIF, fontSize:30, fontWeight:600, color:COLORS.ink }}>{s.title}</h1>
-          <button type="button" className="a-btn-primary" style={{ padding:"10px 18px" }} onClick={() => navigate("add-product")}>
-            {t.addProduct.open}
-          </button>
+          {canAddProducts && (
+            <button type="button" className="a-btn-primary" style={{ padding:"10px 18px" }} onClick={() => navigate("add-product")}>
+              {t.addProduct.open}
+            </button>
+          )}
         </div>
 
         {loadError ? (
