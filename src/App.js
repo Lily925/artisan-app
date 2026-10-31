@@ -18,6 +18,8 @@ import AddProductForm from "./components/AddProductForm";
 import Portfolio from "./components/Portfolio";
 import ProfilePage from "./components/ProfilePage";
 import ShopSetup from "./components/ShopSetup";
+import ShopStatusBanner from "./components/ShopStatusBanner";
+import AdminShops from "./components/AdminShops";
 import ProductCard from "./components/ProductCard";
 
 // One switcher sets both: the UI language and the display currency that goes with it.
@@ -31,6 +33,8 @@ function savedLang() {
   } catch { return "en"; }
 }
 
+const SHOP_NAME = /^[\p{L}\p{N}][\p{L}\p{N} ._&'-]{1,59}$/u; // same rule as the server
+const SHOP_DESCRIPTION_MAX = 500;
 const AVATAR_BY_ROLE = { admin: "🧑‍💼", artisan: "👩‍🎨", buyer: "🛍" };
 // One-click demo logins on the login page: development only. Production builds leave them
 // (and the seed password) out of the bundle; the API refuses that password in production anyway.
@@ -49,12 +53,14 @@ function LoginPage({ onLogin, onRegister, lang }) {
   const [showPw, setShowPw] = useState(false);
   const [busy, setBusy] = useState(false);
   const [accountType, setAccountType] = useState("buyer"); // register: "buyer" | "artisan"
+  const [shopName, setShopName] = useState("");
+  const [shopDescription, setShopDescription] = useState("");
 
   const lbl = lang==="mn"
-    ? { login:"Нэвтрэх", register:"Бүртгүүлэх", email:"Имэйл", pw:"Нууц үг", name:"Нэр", loginBtn:"Нэвтрэх", registerBtn:"Бүртгүүлэх", noAcc:"Бүртгэл байхгүй юу?", hasAcc:"Бүртгэл байна уу?", wrongPw:"Имэйл эсвэл нууц үг буруу", demo:"Туршилтаар нэвтрэх:", appSub:"Монгол гар урлалын зах зээл", fillAll:"Бүх талбарыг бөглөнө үү", accountType:"Бүртгэлийн төрөл", buyerTitle:"Би худалдан авна", buyerSub:"Гар урлалын бүтээл худалдан авч, тусгай захиалга өгнө.", artisanTitle:"Би гар урлалын бүтээлээ зарна", artisanNote:"Урчны бүртгэлээр бүтээгдэхүүн нэмэх, захиалгаа удирдах, борлуулалтын самбараа харах боломжтой. Бүртгүүлсний дараа дэлгүүрээ тохируулна." }
+    ? { login:"Нэвтрэх", register:"Бүртгүүлэх", email:"Имэйл", pw:"Нууц үг", name:"Нэр", loginBtn:"Нэвтрэх", registerBtn:"Бүртгүүлэх", noAcc:"Бүртгэл байхгүй юу?", hasAcc:"Бүртгэл байна уу?", wrongPw:"Имэйл эсвэл нууц үг буруу", demo:"Туршилтаар нэвтрэх:", appSub:"Монгол гар урлалын зах зээл", fillAll:"Бүх талбарыг бөглөнө үү", accountType:"Бүртгэлийн төрөл", buyerTitle:"Би худалдан авна", buyerSub:"Гар урлалын бүтээл худалдан авч, тусгай захиалга өгнө.", artisanTitle:"Би гар урлалаа зарна", artisanNote:"Урчны бүртгэлээр бүтээгдэхүүн нэмэх, захиалгаа удирдах, борлуулалтын самбараа харах боломжтой. Админ дэлгүүрийг тань зөвшөөрсний дараа дэлгүүр нээгдэнэ.", shopName:"Дэлгүүрийн нэр", shopNameHint:"2-60 тэмдэгт. Дараа нь өөрчлөх боломжгүй.", shopDesc:"Дэлгүүрийн товч тайлбар", shopDescHint:"Юу хийдэг, хэрхэн хийдэг вэ?", nameInvalid:"Дэлгүүрийн нэр 2-60 тэмдэгт байх ёстой: үсэг, тоо, хоосон зай болон . _ - & '", nameTaken:"Энэ дэлгүүрийн нэр бүртгэлтэй байна", emailTaken:"Энэ имэйл бүртгэлтэй байна" }
     : lang==="ko"
-    ? { login:"로그인", register:"회원가입", email:"이메일", pw:"비밀번호", name:"이름", loginBtn:"로그인", registerBtn:"회원가입", noAcc:"계정이 없으신가요?", hasAcc:"이미 계정이 있으신가요?", wrongPw:"이메일 또는 비밀번호가 틀렸습니다", demo:"데모 로그인:", appSub:"몽골 전통 공예 마켓", fillAll:"모든 항목을 입력해주세요", accountType:"계정 유형", buyerTitle:"구매하고 싶어요", buyerSub:"핸드메이드 작품을 구매하고 맞춤 주문을 할 수 있어요.", artisanTitle:"내 핸드메이드 작품을 판매하고 싶어요", artisanNote:"장인 계정으로 상품 등록, 주문 관리, 판매 대시보드를 이용할 수 있어요. 가입 후 바로 상점을 설정해요." }
-    : { login:"Login", register:"Register", email:"Email", pw:"Password", name:"Name", loginBtn:"Login", registerBtn:"Create Account", noAcc:"Don't have an account?", hasAcc:"Already have an account?", wrongPw:"Incorrect email or password", demo:"Demo login:", appSub:"Mongolian Handmade Marketplace", fillAll:"Please fill all fields", accountType:"Account type", buyerTitle:"I want to buy", buyerSub:"Shop handmade pieces and order custom work.", artisanTitle:"I want to sell my handmade products", artisanNote:"An artisan account lets you add products, manage orders and see your sales dashboard. You'll set up your shop right after signing up." };
+    ? { login:"로그인", register:"회원가입", email:"이메일", pw:"비밀번호", name:"이름", loginBtn:"로그인", registerBtn:"회원가입", noAcc:"계정이 없으신가요?", hasAcc:"이미 계정이 있으신가요?", wrongPw:"이메일 또는 비밀번호가 틀렸습니다", demo:"데모 로그인:", appSub:"몽골 전통 공예 마켓", fillAll:"모든 항목을 입력해주세요", accountType:"계정 유형", buyerTitle:"구매하고 싶어요", buyerSub:"핸드메이드 작품을 구매하고 맞춤 주문을 할 수 있어요.", artisanTitle:"내 공예품을 판매하고 싶어요", artisanNote:"장인 계정으로 상품 등록, 주문 관리, 판매 대시보드를 이용할 수 있어요. 관리자가 상점을 승인하면 상점이 공개돼요.", shopName:"상점 이름", shopNameHint:"2~60자. 나중에 바꿀 수 없어요.", shopDesc:"상점 소개 (짧게)", shopDescHint:"무엇을, 어떻게 만드나요?", nameInvalid:"상점 이름은 2~60자의 글자, 숫자, 공백, . _ - & ' 만 쓸 수 있어요", nameTaken:"이미 사용 중인 상점 이름이에요", emailTaken:"이미 가입된 이메일이에요" }
+    : { login:"Login", register:"Register", email:"Email", pw:"Password", name:"Name", loginBtn:"Login", registerBtn:"Create Account", noAcc:"Don't have an account?", hasAcc:"Already have an account?", wrongPw:"Incorrect email or password", demo:"Demo login:", appSub:"Mongolian Handmade Marketplace", fillAll:"Please fill all fields", accountType:"Account type", buyerTitle:"I want to buy", buyerSub:"Shop handmade pieces and order custom work.", artisanTitle:"I want to sell my crafts", artisanNote:"An artisan account lets you add products, manage orders and see your sales dashboard. Your shop opens once an admin approves it.", shopName:"Shop name", shopNameHint:"2-60 characters. It can't be changed later.", shopDesc:"Short shop description", shopDescHint:"What do you make, and how?", nameInvalid:"Shop name must be 2-60 characters: letters, numbers, spaces and . _ - & '", nameTaken:"That shop name is already taken", emailTaken:"That email is already registered" };
 
   const handleLogin = async (loginEmail = email, loginPassword = password) => {
     if (!loginEmail || !loginPassword) { setError(lbl.fillAll); return; }
@@ -69,12 +75,15 @@ function LoginPage({ onLogin, onRegister, lang }) {
   };
 
   const handleRegister = async () => {
-    if (!name || !email || !password) { setError(lbl.fillAll); return; }
+    const isArtisan = accountType === "artisan";
+    if (!name || !email || !password || (isArtisan && !shopName.trim())) { setError(lbl.fillAll); return; }
+    if (isArtisan && !SHOP_NAME.test(shopName.trim())) { setError(lbl.nameInvalid); return; }
     setBusy(true); setError("");
     try {
-      await onRegister(name, email, password, accountType);
+      await onRegister(name, email, password, accountType, isArtisan ? { shopName: shopName.trim(), shopDescription: shopDescription.trim() } : undefined);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : lbl.wrongPw);
+      const byCode = { BAD_SHOP_NAME: lbl.nameInvalid, SHOP_NAME_TAKEN: lbl.nameTaken };
+      setError(err instanceof ApiError ? (byCode[err.code] || (err.status === 409 ? lbl.emailTaken : err.message)) : lbl.wrongPw);
     } finally {
       setBusy(false);
     }
@@ -138,6 +147,20 @@ function LoginPage({ onLogin, onRegister, lang }) {
             <div style={{ marginBottom:16 }}>
               <label className="a-label" htmlFor="login-name">{lbl.name}</label>
               <input id="login-name" className="a-input" value={name} onChange={e=>setName(e.target.value)} placeholder="Narantsetseg" />
+            </div>
+          )}
+          {tab==="register" && accountType==="artisan" && (
+            <div style={{ background:COLORS.bgSoft, border:`1px solid ${COLORS.border}`, borderRadius:2, padding:"16px 14px 2px", marginBottom:16 }}>
+              <div style={{ marginBottom:14 }}>
+                <label className="a-label" htmlFor="signup-shop-name">{lbl.shopName} *</label>
+                <input id="signup-shop-name" className="a-input" value={shopName} onChange={e=>setShopName(e.target.value)} maxLength={60} autoComplete="organization" aria-describedby="signup-shop-name-hint" />
+                <div id="signup-shop-name-hint" style={{ fontSize:12, color:COLORS.inkSoft, marginTop:6 }}>{lbl.shopNameHint}</div>
+              </div>
+              <div style={{ marginBottom:14 }}>
+                <label className="a-label" htmlFor="signup-shop-desc">{lbl.shopDesc}</label>
+                <textarea id="signup-shop-desc" className="a-textarea" style={{ minHeight:80 }} value={shopDescription} onChange={e=>setShopDescription(e.target.value)} maxLength={SHOP_DESCRIPTION_MAX} placeholder={lbl.shopDescHint} aria-describedby="signup-shop-desc-count" />
+                <div id="signup-shop-desc-count" style={{ fontSize:12, color:COLORS.inkSoft, marginTop:6, textAlign:"right", fontVariantNumeric:"tabular-nums" }}>{shopDescription.length} / {SHOP_DESCRIPTION_MAX}</div>
+              </div>
             </div>
           )}
           <div style={{ marginBottom:16 }}>
@@ -253,6 +276,8 @@ export default function App() {
   const [storeArtisan, setStoreArtisan] = useState(null); // artisan whose storefront is open
   // An artisan account without a shop profile yet (new sign-up): sent to "Set up your shop".
   const [shopSetupNeeded, setShopSetupNeeded] = useState(false);
+  // Own shop's approval: { status, reason }. Only "approved" shops are public and can publish.
+  const [shopStatus, setShopStatus] = useState({ status: "approved", reason: "" });
   const [profileArtisan, setProfileArtisan] = useState(null); // artisan whose personal profile is open
   // Pages to return to from the storefront / artisan-profile pages ("Back" pops one).
   const [backStack, setBackStack] = useState([]);
@@ -340,7 +365,7 @@ export default function App() {
       api.getMe().then(updateCurrentUser).catch(handleApiError);
       if (currentUser.role === "artisan") {
         api.getMyArtisan()
-          .then(() => setShopSetupNeeded(false))
+          .then((a) => { setShopSetupNeeded(false); setShopStatus({ status: a.status || "approved", reason: a.statusReason || "" }); })
           .catch((err) => {
             if (err.status !== 404) return handleApiError(err);
             setShopSetupNeeded(true);
@@ -348,7 +373,7 @@ export default function App() {
           });
       } else setShopSetupNeeded(false);
     }
-    else { setCart(null); setOrders([]); setSavedItems([]); setShopSetupNeeded(false); }
+    else { setCart(null); setOrders([]); setSavedItems([]); setShopSetupNeeded(false); setShopStatus({ status: "approved", reason: "" }); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUserId]);
 
@@ -359,8 +384,9 @@ export default function App() {
     setCurrentUser(user);
   };
   // accountType is only a request: the server accepts "buyer" or "artisan" and nothing else.
-  const handleRegister = async (name, email, password, accountType = "buyer") => {
-    const { token, user } = await api.signup(name, email, password, accountType === "artisan" ? "artisan" : "buyer");
+  // Artisans also send shop: { shopName, shopDescription }; the new shop waits for approval.
+  const handleRegister = async (name, email, password, accountType = "buyer", shop) => {
+    const { token, user } = await api.signup(name, email, password, accountType === "artisan" ? "artisan" : "buyer", shop);
     setToken(token);
     localStorage.setItem("artisan-user", JSON.stringify(user));
     setCurrentUser(user);
@@ -373,6 +399,8 @@ export default function App() {
   const SHOP_SETUP_GATED = ["shop-setup", "dashboard", "shop-orders", "shop-settings", "add-product", "edit-product"];
   const showShopSetup = currentUser.role === "artisan" && shopSetupNeeded && SHOP_SETUP_GATED.includes(page);
   const currentUserAvatar = AVATAR_BY_ROLE[currentUser.role] || "🙂";
+  const isArtisan = currentUser.role === "artisan";
+  const shopLive = !isArtisan || shopSetupNeeded || shopStatus.status === "approved";
 
   const navigate = (pg) => { setPage(pg); setPageKey(k => k + 1); };
   // Heart = like. Flip the heart immediately, then take liked state + count from the server.
@@ -472,7 +500,8 @@ export default function App() {
   const liveArtisan = (a) => (a && products.find(p => p.artisan?._id === a._id)?.artisan) || a;
   // The API also returns an artisan's own hidden products (isHidden) to that artisan, so
   // they can still open them; every public list leaves them out.
-  const publicProducts = products.filter(p => !p.isHidden);
+  // Same for the artisan's own products while their shop isn't approved.
+  const publicProducts = products.filter(p => !p.isHidden && (!p.artisan?.status || p.artisan.status === "approved"));
   const storeArtisanLive = liveArtisan(storeArtisan);
   const profileArtisanLive = liveArtisan(profileArtisan);
 
@@ -511,6 +540,8 @@ export default function App() {
         cartCount={cartCount} wishlistCount={savedItems.length}
         currentUser={{ ...currentUser, avatar: currentUserAvatar }} navigate={navigate} t={t}
       />
+
+      {isArtisan && !shopSetupNeeded && <ShopStatusBanner t={t} status={shopStatus.status} reason={shopStatus.reason} />}
 
       {/* ── TOAST ── */}
       {toast && (
@@ -585,7 +616,7 @@ export default function App() {
       {showShopSetup && (
         <ShopSetup
           key={pageKey} t={t} onApiError={handleApiError}
-          onDone={() => { setShopSetupNeeded(false); showToast(t.shopSetup.done); refreshProducts(); navigate("profile"); window.scrollTo(0, 0); }}
+          onDone={(artisan) => { setShopSetupNeeded(false); setShopStatus({ status: artisan?.status || "pending", reason: "" }); showToast(t.shopSetup.done); refreshProducts(); navigate("profile"); window.scrollTo(0, 0); }}
         />
       )}
 
@@ -622,7 +653,18 @@ export default function App() {
         />
       )}
 
-      {page==="add-product" && currentUser.role==="artisan" && !showShopSetup && (
+      {page==="add-product" && isArtisan && !showShopSetup && !shopLive && (
+        <div className="a-page page">
+          <p role="status" style={{ fontFamily:FONT_SANS, fontSize:15, color:COLORS.ink, marginTop:12 }}>{t.shopStatus.cantPublish}</p>
+          <button type="button" className="a-btn-outline" style={{ marginTop:16 }} onClick={() => navigate("profile")}>{t.profile}</button>
+        </div>
+      )}
+
+      {page==="admin-shops" && currentUser.role==="admin" && (
+        <AdminShops key={pageKey} t={t} lang={lang} onApiError={handleApiError} showToast={showToast} />
+      )}
+
+      {page==="add-product" && isArtisan && !showShopSetup && shopLive && (
         <AddProductForm
           key={pageKey} t={t} rateMnt={rates.MNT} onApiError={handleApiError}
           onBack={() => navigate("shop-settings")}
@@ -673,7 +715,7 @@ export default function App() {
           key={pageKey} t={t} lang={lang} user={currentUser} emoji={currentUserAvatar}
           products={products} savedItems={savedItems} toggleSave={toggleSave} openProduct={openProduct}
           fmtBasic={fmtBasic} fmtAmt={fmtAmt} cartLines={cart?.items?.length || 0}
-          orders={orders} openOrder={openOrder} navigate={navigate} logout={logout} shopSetupNeeded={shopSetupNeeded}
+          orders={orders} openOrder={openOrder} navigate={navigate} logout={logout} shopSetupNeeded={shopSetupNeeded} shopLive={shopLive}
           onApiError={handleApiError}
           onUpdated={(user) => { updateCurrentUser(user); if (currentUser.role === "artisan") refreshProducts(); }}
         />

@@ -16,6 +16,7 @@ const Artisan = require("../models/Artisan");
 const Product = require("../models/Product");
 const { users, artisanProfiles, products } = require("./seedData");
 const { pricingTiersFor } = require("../utils/pricing");
+const { createShop } = require("../utils/shops");
 
 async function run() {
   await connectDB();
@@ -36,7 +37,7 @@ async function run() {
   for (const [email, profile] of Object.entries(artisanProfiles)) {
     const user = userByEmail[email];
     if (!user || (await Artisan.exists({ user: user._id }))) continue;
-    newArtisanByEmail[email] = await Artisan.create({ user: user._id, certified: true, ...profile });
+    newArtisanByEmail[email] = await createShop({ user: user._id, certified: true, status: "approved", ...profile }, user.name);
     created.artisans++;
   }
 

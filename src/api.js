@@ -60,8 +60,10 @@ async function request(path, { method = "GET", body, formData, auth = false, hea
 }
 
 export const api = {
-  signup: (name, email, password, role) =>
-    request("/auth/signup", { method: "POST", body: { name, email, password, role } }),
+  // role: "buyer" | "artisan". Artisans also send shop: { shopName, shopDescription }; the
+  // shop starts "pending" until an admin approves it.
+  signup: (name, email, password, role, shop) =>
+    request("/auth/signup", { method: "POST", body: { name, email, password, role, ...(role === "artisan" && shop) } }),
   login: (email, password) =>
     request("/auth/login", { method: "POST", body: { email, password } }),
   // Own account. Returns { token, user }: earlier tokens stop working, so store the new one.
@@ -135,4 +137,10 @@ export const api = {
     request(`/commissions/${id}/bids`, { method: "POST", auth: true, body: { price, message } }),
   acceptBid: (id, bidId) =>
     request(`/commissions/${id}/accept-bid`, { method: "PUT", auth: true, body: { bidId } }),
+
+  // Admin only. status: "pending" | "approved" | "rejected" | "suspended" (omit for all).
+  getAdminShops: (status) => request(`/admin/shops${status ? `?status=${status}` : ""}`, { auth: true }),
+  // action: "approve" | "reject" | "suspend" | "unsuspend"; reason (optional) for reject / suspend
+  changeShopStatus: (id, action, reason) =>
+    request(`/admin/shops/${id}/${action}`, { method: "PUT", auth: true, body: reason ? { reason } : {} }),
 };

@@ -72,7 +72,7 @@ function OrderRow({ first, title, sub, amount, onOpen }) {
 // Buyers: stats, order history, liked items.
 export default function ProfilePage({
   t, lang, user, emoji, products, savedItems, toggleSave, openProduct, fmtBasic, fmtAmt,
-  cartLines, orders, openOrder, navigate, logout, onUpdated, onApiError, shopSetupNeeded,
+  cartLines, orders, openOrder, navigate, logout, onUpdated, onApiError, shopSetupNeeded, shopLive = true,
 }) {
   const pp = t.profilePage;
   const o = t.orders;
@@ -137,7 +137,7 @@ export default function ProfilePage({
           <Onboarding t={t} steps={[
             { key:"setup", label:t.onboarding.setup, done:!shopSetupNeeded, action:() => navigate("shop-setup") },
             { key:"photo", label:t.onboarding.photo, hint:t.onboarding.photoHint, done:Boolean(user.avatarUrl) },
-            { key:"product", label:t.onboarding.product, done:myProducts.length > 0, action:shopSetupNeeded ? null : () => navigate("add-product") },
+            { key:"product", label:t.onboarding.product, hint:shopSetupNeeded || shopLive ? null : t.shopStatus.cantPublish, done:myProducts.length > 0, action:shopSetupNeeded || !shopLive ? null : () => navigate("add-product") },
             { key:"payout", label:t.onboarding.payout, done:Boolean(payoutEmail), action:shopSetupNeeded ? null : () => navigate("shop-settings") },
           ]} />
         )}
@@ -152,6 +152,11 @@ export default function ProfilePage({
                   <button type="button" className="a-btn-primary" style={actionBtn} onClick={() => navigate("add-product")}>{t.addProduct.open}</button>
                   <button type="button" className="a-btn-outline" style={actionBtn} onClick={() => navigate("shop-settings")}>{t.shopSettings.open}</button>
                   <button type="button" className="a-btn-outline" style={actionBtn} onClick={() => navigate("commission-board")}>{t.commissions.boardOpen}</button>
+                </div>
+              )}
+              {user.role === "admin" && (
+                <div style={{ marginTop:20 }}>
+                  <button type="button" className="a-btn-primary" style={actionBtn} onClick={() => navigate("admin-shops")}>🛡 {t.adminShops.open}</button>
                 </div>
               )}
               <div style={{ marginTop:12 }}>

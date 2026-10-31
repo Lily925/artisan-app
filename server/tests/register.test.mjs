@@ -1,7 +1,9 @@
-// API tests for sign-up roles and "Set up your shop".
+// API tests for sign-up roles and "Set up your shop" (shop approval: shop-approval.test.mjs).
 // Run with the API running (npm run dev / npm start):  npm run test:api
 // Uses 8 sign-up attempts (the limit is 10 per hour per address; restarting the API resets it).
 // Every account it creates (reg-test-*@test.invalid) is deleted at the end, also when a check fails.
+// "Set up your shop" is only for artisan accounts without a shop (sign-up creates one now), so
+// that account is created directly in the database.
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 require("dotenv").config();
@@ -17,8 +19,21 @@ const call = async (path, { method = "GET", token, json } = {}) => {
 const tag = crypto.randomBytes(4).toString("hex");
 const pw = crypto.randomBytes(12).toString("hex");
 const email = (k) => `reg-test-${k}-${tag}@test.invalid`;
-const signup = (k, role) => call("/auth/signup", { method: "POST", json: { name: `Reg Test ${k}`, email: email(k), password: pw, ...(role !== "omit" && { role }) } });
+const signup = (k, role) => call("/auth/signup", { method: "POST", json: {
+  name: `Reg Test ${k}`, email: email(k), password: pw, ...(role !== "omit" && { role }),
+  ...(role === "artisan" && { shopName: `Reg Signup Shop ${tag}`, shopDescription: "Felt and wool." }),
+} });
 
+
+// An artisan account with no shop, logged in; returns its token.
+async function legacyArtisan() {
+  const bcrypt = require("bcryptjs");
+  const connectDB = require("../src/config/db");
+  const User = require("../src/models/User");
+  await connectDB();
+  await User.create({ name: "Reg Test legacy", email: email("legacy"), passwordHash: await bcrypt.hash(pw, 10), role: "artisan" });
+  return (await call("/auth/login", { method: "POST", json: { email: email("legacy"), password: pw } })).body.token;
+}
 
 async function cleanup() {
   const mongoose = require("mongoose");
@@ -41,8 +56,8 @@ try {
   r = await signup("default", "omit");
   check("no role sent → buyer", r.status === 201 && r.body.user.role === "buyer");
   r = await signup("artisan", "artisan");
-  check("artisan sign-up → 201, role artisan", r.status === 201 && r.body.user.role === "artisan");
-  const artisanToken = r.body.token;
+  check("artisan sign-up → 201, role artisan, shop pending", r.status === 201 && r.body.user.role === "artisan" && r.body.shop?.status === "pending", `${r.status} ${r.body.error || ""}`);
+  check("artisan's shop already exists (GET /artisans/me)", (await call("/artisans/me", { token: r.body.token })).body.shopName === `Reg Signup Shop ${tag}`);
   for (const bad of ["admin", "ADMIN", ["artisan"], { $ne: "buyer" }, null]) {
     r = await signup(`bad${typeof bad}`, bad);
     check(`role ${JSON.stringify(bad)} rejected (400 BAD_ROLE)`, r.status === 400 && r.body.code === "BAD_ROLE", `${r.status} ${r.body.error}`);
@@ -50,7 +65,8 @@ try {
   const login = await call("/auth/login", { method: "POST", json: { email: email("badstring"), password: pw } });
   check("no account was created for a rejected role", login.status === 401);
 
-  // ── shop setup ──
+  // ── shop setup (artisan account without a shop, e.g. from before sign-up created one) ──
+  const artisanToken = await legacyArtisan();
   r = await call("/artisans/me", { token: artisanToken });
   check("new artisan has no shop yet (GET /artisans/me → 404)", r.status === 404);
   check("buyer can't set up a shop (403)", (await call("/artisans/me", { method: "POST", token: buyerToken, json: { shopName: "Buyer Shop" } })).status === 403);
@@ -66,7 +82,7 @@ try {
   r = await call("/artisans/me", { method: "POST", token: artisanToken, json: { shopName: { $gt: "" } } });
   check("non-text fields rejected (400)", r.status === 400);
   r = await call("/artisans/me", { method: "POST", token: artisanToken, json: { shopName: ` Reg Test Shop ${tag} `, location: "Darkhan", bio: "I make felt slippers.", instagramHandle: "@reg_test_shop", certified: true, payoutEmail: "x@y.z" } });
-  check("setup saved → 201", r.status === 201, `${r.status} ${r.body.error || ""}`);
+  check("setup saved → 201, pending approval", r.status === 201 && r.body.status === "pending", `${r.status} ${r.body.error || ""}`);
   check("saved fields (trimmed, @ stripped)", r.body.shopName === `Reg Test Shop ${tag}` && r.body.location === "Darkhan" && r.body.bio === "I make felt slippers." && r.body.instagramHandle === "reg_test_shop");
   check("can't make itself certified", r.body.certified === false);
   const artisanId = r.body._id;
@@ -78,7 +94,7 @@ try {
   r = await call("/artisans/me", { token: artisanToken });
   check("shop name can't be changed later; payout email can", r.body.shopName === `Reg Test Shop ${tag}` && r.body.payoutEmail === "reg-test-payout@test.invalid");
   r = await call(`/artisans/${artisanId}`);
-  check("public shop has no email/payout email", r.status === 200 && !JSON.stringify(r.body).includes("@test.invalid"));
+  check("pending shop isn't public (404)", r.status === 404);
   r = await call("/users/me", { token: artisanToken });
   check("artisan account role stays artisan", r.body.role === "artisan");
 

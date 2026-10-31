@@ -1,7 +1,9 @@
 const Artisan = require("../models/Artisan");
 const Product = require("../models/Product");
 const { sendPendingForArtisan } = require("../utils/payouts");
+const mongoose = require("mongoose");
 const { ARTISAN_USER_PUBLIC } = require("../config/constants");
+const { LIVE_SHOP_FILTER, SHOP_NAME, shopNameTaken, createShop } = require("../utils/shops");
 
 // Fields an artisan may change on their own profile, with the JSON type each
 // accepts. Everything else (shopName, specialty, certified, photoUrl, user) stays
@@ -16,7 +18,8 @@ const SELF_EDITABLE_FIELDS = {
 };
 
 // Public endpoints expose the artisan's name, profile photo and short bio — never email
-// (contact is Instagram-only).
+// (contact is Instagram-only) — and only approved shops: pending, rejected and suspended
+// shops don't exist publicly.
 // ?category=<key> returns only artisans who sell at least one product in that category
 // (used to match artisans to a commission request).
 async function listArtisans(req, res) {
@@ -24,28 +27,31 @@ async function listArtisans(req, res) {
   if (category !== undefined && typeof category !== "string") {
     return res.status(400).json({ error: "category must be a string" });
   }
-  const filter = category ? { _id: { $in: await Product.distinct("artisan", { category, isHidden: { $ne: true } }) } } : {};
+  const filter = { ...LIVE_SHOP_FILTER };
+  if (category) filter._id = { $in: await Product.distinct("artisan", { category, isHidden: { $ne: true } }) };
   const artisans = await Artisan.find(filter).populate("user", ARTISAN_USER_PUBLIC);
   res.json(artisans);
 }
 
+// By id or by slug (e.g. /api/artisans/noon-handmade).
 async function getArtisan(req, res) {
-  const artisan = await Artisan.findById(req.params.id).populate("user", ARTISAN_USER_PUBLIC);
+  const key = mongoose.isValidObjectId(req.params.id) ? { _id: req.params.id } : { slug: String(req.params.id).toLowerCase() };
+  const artisan = await Artisan.findOne({ ...key, ...LIVE_SHOP_FILTER }).populate("user", ARTISAN_USER_PUBLIC);
   if (!artisan) return res.status(404).json({ error: "Artisan not found" });
   res.json(artisan);
 }
 
+// Includes the approval status and the admin's reason (shown to the owner only).
 async function getMyArtisan(req, res) {
-  const artisan = await Artisan.findOne({ user: req.user.id }).select("+payoutEmail").populate("user", "name email");
+  const artisan = await Artisan.findOne({ user: req.user.id }).select("+payoutEmail +statusReason").populate("user", "name email");
   if (!artisan) return res.status(404).json({ error: "No artisan profile is linked to this account" });
   res.json(artisan);
 }
 
-// "Set up your shop" (first step after an artisan signs up): creates the caller's Artisan
-// record once. shopName is required here and can't be changed by the artisan later
+// "Set up your shop", for artisan accounts without a shop (sign-up creates it now, so only
+// older accounts): creates the caller's Artisan record once, "pending" until an admin
+// approves it. shopName is required here and can't be changed by the artisan later
 // (see SELF_EDITABLE_FIELDS). New shops are never certified. 409 if the shop exists.
-const SHOP_NAME = /^[\p{L}\p{N}][\p{L}\p{N} ._&'-]{1,59}$/u;
-const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 async function setupMyShop(req, res) {
   const str = (v) => (typeof v === "string" ? v.trim() : v === undefined ? "" : null);
@@ -57,12 +63,11 @@ async function setupMyShop(req, res) {
   if (await Artisan.exists({ user: req.user.id })) {
     return res.status(409).json({ error: "Your shop is already set up", code: "SHOP_EXISTS" });
   }
-  // Shop names are unique (case-insensitive) so nobody can pose as an existing shop.
-  if (await Artisan.exists({ shopName: new RegExp(`^${escapeRegex(shopName)}$`, "i") })) {
+  if (await shopNameTaken(shopName)) {
     return res.status(409).json({ error: "That shop name is already taken", code: "SHOP_NAME_TAKEN" });
   }
   try {
-    const artisan = await Artisan.create({ user: req.user.id, shopName, location, bio, instagramHandle, certified: false });
+    const artisan = await createShop({ user: req.user.id, shopName, location, bio, instagramHandle, certified: false, status: "pending" });
     await artisan.populate("user", "name email");
     res.status(201).json(artisan);
   } catch (err) {

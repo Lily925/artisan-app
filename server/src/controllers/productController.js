@@ -9,13 +9,14 @@ const { recordProductView } = require("../utils/productViews");
 const { ProductViewMark } = require("../models/ProductView");
 
 const { ARTISAN_USER_PUBLIC } = require("../config/constants");
+const { isShopLive, shopIsLive, notLiveShopIds } = require("../utils/shops");
 
 const ARTISAN_POPULATE = { path: "artisan", populate: { path: "user", select: ARTISAN_USER_PUBLIC } };
 
-// Query condition for products the caller may see: everything not hidden, plus the
-// caller's own hidden products when they're the owning artisan.
+// Query condition for products the caller may see: everything not hidden from approved
+// shops, plus all of the caller's own products when they're the owning artisan.
 async function visibleTo(user) {
-  const visible = { isHidden: { $ne: true } };
+  const visible = { isHidden: { $ne: true }, artisan: { $nin: await notLiveShopIds() } };
   if (user?.role !== "artisan") return visible;
   const own = await Artisan.findOne({ user: user.id }).select("_id");
   return own ? { $or: [visible, { artisan: own._id }] } : visible;
@@ -126,6 +127,10 @@ async function createProduct(req, res) {
   if (!artisan) {
     return res.status(400).json({ error: "No artisan profile is linked to this account yet" });
   }
+  // Pending / rejected / suspended shops can't publish.
+  if (!isShopLive(artisan)) {
+    return res.status(403).json({ error: "Your shop must be approved before you can add products", code: "SHOP_NOT_APPROVED" });
+  }
 
   const { fields, problems } = readProductFields(req.body);
   const files = req.files || [];
@@ -222,7 +227,7 @@ async function likeProduct(req, res) {
   const { id } = req.params;
   if (!mongoose.isValidObjectId(id)) return res.status(404).json({ error: "Product not found" });
   await Product.updateOne(
-    { _id: id, likedBy: { $ne: req.user.id }, isHidden: { $ne: true } },
+    { _id: id, likedBy: { $ne: req.user.id }, isHidden: { $ne: true }, artisan: { $nin: await notLiveShopIds() } },
     { $push: { likedBy: req.user.id }, $inc: { likeCount: 1 } }
   );
   const state = await likeState(id, req.user.id);
@@ -257,7 +262,7 @@ const SESSION_ID = /^[A-Za-z0-9-]{16,64}$/;
 async function recordView(req, res) {
   if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ error: "Product not found" });
   const product = await Product.findById(req.params.id).select("artisan isHidden");
-  if (!product || product.isHidden) return res.status(404).json({ error: "Product not found" });
+  if (!product || product.isHidden || !(await shopIsLive(product.artisan))) return res.status(404).json({ error: "Product not found" });
 
   let viewerKey = null;
   if (req.user) {

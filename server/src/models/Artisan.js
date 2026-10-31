@@ -7,6 +7,16 @@ const artisanSchema = new mongoose.Schema(
     certified: { type: Boolean, default: false },
     specialty: { type: String, default: "" },
     shopName: { type: String, default: "", trim: true },
+    // URL-safe, unique (see utils/shops.uniqueSlug). Missing only on shops from before slugs
+    // existed, until `npm run migrate:shops` fills it in.
+    slug: { type: String, trim: true, lowercase: true, unique: true, sparse: true, match: [/^[a-z0-9]+(-[a-z0-9]+)*$/, "Invalid slug"] },
+    // Approval (utils/shops). No default on purpose: a shop from before approval existed has
+    // no status and counts as approved; every new shop is created with "pending".
+    status: { type: String, enum: ["pending", "approved", "rejected", "suspended"] },
+    // Admin's reason for a rejection / suspension, shown to the shop owner only.
+    statusReason: { type: String, default: "", trim: true, maxlength: [300, "Reason must be 300 characters or fewer"], select: false },
+    reviewedAt: { type: Date, select: false },
+    reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", select: false },
     // Stored without the leading "@"; used to build instagram.com/<handle> links.
     instagramHandle: {
       type: String,

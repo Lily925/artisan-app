@@ -7,6 +7,7 @@ const { VIDEO_TIERS } = require("../config/constants");
 const { offersPatron } = require("../utils/pricing");
 const { orderTotals } = require("../utils/orderTotals");
 const payouts = require("../utils/payouts");
+const { shopIsLive } = require("../utils/shops");
 
 // Turns the buyer's cart into order items + totals, or explains why it can't be ordered.
 // Used by PayPal checkout (paymentController.js). Returns { cart, items, totals } or { error }.
@@ -18,7 +19,8 @@ async function buildOrderFromCart(userId) {
   if (lines.length === 0) return fail(400, "Cart is empty", "CART_EMPTY");
   const shops = new Set(lines.map((i) => String(i.product.artisan)));
   if (shops.size > 1) return fail(409, "An order can only contain products from one shop", "OTHER_SHOP");
-  const hidden = lines.find((i) => i.product.isHidden);
+  // Hidden products, or a shop that was suspended since they were added.
+  const hidden = (await shopIsLive(lines[0].product.artisan)) ? lines.find((i) => i.product.isHidden) : lines[0];
   if (hidden) {
     return fail(409, `"${hidden.product.titleEn || hidden.product.title}" isn't available right now. Remove it from your cart.`, "PRODUCT_UNAVAILABLE");
   }

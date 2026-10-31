@@ -74,7 +74,11 @@ products, and the photos are on Cloudinary).
    To choose a password yourself instead: `NEW_PASSWORD='...' npm run set-password -- <email>`.
    `noon.handmade@example.com` is the real shop's login. Consider changing it to the owner's
    real email address too (directly in Atlas → Browse Collections → `users`).
-3. Make sure no photos still point at local disk: `npm run migrate:images -- --dry-run`
+3. **Approve existing shops.** Shops from before shop approval existed have no status (they
+   count as approved meanwhile). Give them `approved` and a URL slug, once:
+   `npm run migrate:shops -- --dry-run` to preview, then `npm run migrate:shops`. It only
+   touches shops without a status / slug, so running it again changes nothing.
+4. Make sure no photos still point at local disk: `npm run migrate:images -- --dry-run`
    should report `0 local photo path(s)`. If it doesn't, run `npm run migrate:images`.
 
 `npm run seed` and `npm run seed:demo` refuse to run with `NODE_ENV=production` unless you

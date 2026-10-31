@@ -18,6 +18,7 @@ const orderRoutes = require("./routes/orderRoutes");
 const commissionRoutes = require("./routes/commissionRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 const userRoutes = require("./routes/userRoutes");
+const adminRoutes = require("./routes/adminRoutes");
 
 const app = express();
 app.disable("x-powered-by");
@@ -60,6 +61,7 @@ app.use("/api/orders", orderRoutes);
 app.use("/api/commissions", commissionRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/admin", adminRoutes);
 
 app.use((req, res) => res.status(404).json({ error: "Not found" }));
 

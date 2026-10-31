@@ -11,11 +11,13 @@
     "dev": "nodemon src/server.js",
     "seed": "node src/seed/seed.js",
     "seed:demo": "node src/seed/demo.js",
-    "test:api": "node tests/register.test.mjs && node tests/password.test.mjs",
+    "test:api": "node tests/register.test.mjs && node tests/password.test.mjs && node tests/shop-approval.test.mjs",
     "test:password": "node tests/password.test.mjs",
+    "test:shops": "node tests/shop-approval.test.mjs",
     "test:photos": "node tests/product-photos.test.mjs",
     "test:avatars": "node tests/avatars.test.mjs",
     "migrate:images": "node src/scripts/migrate-images-to-cloudinary.js",
+    "migrate:shops": "node src/scripts/migrate-shop-status.js",
     "set-password": "node src/scripts/set-password.js"
   },
   "dependencies": {

@@ -1,6 +1,7 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
+const { SHOP_NAME, SHOP_DESCRIPTION_MAX, shopNameTaken, createShop } = require("../utils/shops");
 const { SEED_PASSWORD } = require("../config/constants");
 
 function signToken(user) {
@@ -21,6 +22,7 @@ const PASSWORD_MAX = 128; // bcrypt only uses the first 72 bytes; this also boun
 const seedPasswordBlocked = (password) => process.env.NODE_ENV === "production" && password === SEED_PASSWORD;
 // The only roles a client may pick when signing up. "admin" (or anything else, including
 // non-strings) is refused; admins are created on the server only (seed / database).
+// Any other field (e.g. "status") is ignored: a new shop is always "pending".
 const SIGNUP_ROLES = ["buyer", "artisan"];
 
 // Login/signup response: the caller's own account (so it includes email).
@@ -46,15 +48,40 @@ async function signup(req, res) {
   }
   if (seedPasswordBlocked(password)) return res.status(400).json({ error: "Please choose a different password", code: "WEAK_PASSWORD" });
 
+  // Artisans name their shop (and may describe it) when signing up.
+  let shopName, shopDescription;
+  if (role === "artisan") {
+    shopName = str(req.body?.shopName)?.trim();
+    shopDescription = req.body?.shopDescription === undefined ? "" : str(req.body.shopDescription)?.trim();
+    if (!SHOP_NAME.test(shopName || "")) {
+      return res.status(400).json({ error: "Shop name must be 2-60 characters: letters, numbers, spaces and . _ - & '", code: "BAD_SHOP_NAME" });
+    }
+    if (shopDescription === undefined || shopDescription.length > SHOP_DESCRIPTION_MAX) {
+      return res.status(400).json({ error: `Shop description must be text of ${SHOP_DESCRIPTION_MAX} characters or fewer`, code: "BAD_SHOP_DESCRIPTION" });
+    }
+  }
+
   const existing = await User.findOne({ email });
   if (existing) return res.status(409).json({ error: "Email already registered" });
+  if (shopName && (await shopNameTaken(shopName))) {
+    return res.status(409).json({ error: "That shop name is already taken", code: "SHOP_NAME_TAKEN" });
+  }
 
   const passwordHash = await bcrypt.hash(password, 10);
-  // An artisan's shop profile (Artisan record) is created by POST /api/artisans/me ("Set up your shop").
   const user = await User.create({ name, email, passwordHash, role });
+  let shop = null;
+  if (shopName) {
+    // The shop waits for an admin's approval before it's public or can sell.
+    try {
+      shop = await createShop({ user: user._id, shopName, bio: shopDescription, status: "pending", certified: false });
+    } catch (err) {
+      await User.deleteOne({ _id: user._id }); // no artisan account without its shop
+      throw err;
+    }
+  }
 
   const token = signToken(user);
-  res.status(201).json({ token, user: toPublicUser(user) });
+  res.status(201).json({ token, user: toPublicUser(user), ...(shop && { shop: { id: shop._id, shopName: shop.shopName, slug: shop.slug, status: shop.status } }) });
 }
 
 async function login(req, res) {

@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const Commission = require("../models/Commission");
 const Artisan = require("../models/Artisan");
 const { ARTISAN_USER_PUBLIC } = require("../config/constants");
+const { isShopLive } = require("../utils/shops");
 
 // Keys match the frontend's productCategories list (same as productController).
 const CATEGORIES = ["jewelry", "ceramics", "art", "textile", "crafts", "leather", "wood"];
@@ -81,6 +82,9 @@ async function submitBid(req, res) {
 
   const artisan = await Artisan.findOne({ user: req.user.id });
   if (!artisan) return res.status(400).json({ error: "No artisan profile is linked to this account yet" });
+  if (!isShopLive(artisan)) {
+    return res.status(403).json({ error: "Your shop must be approved before you can send bids", code: "SHOP_NOT_APPROVED" });
+  }
 
   if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ error: "Commission not found" });
   const commission = await Commission.findById(req.params.id);
