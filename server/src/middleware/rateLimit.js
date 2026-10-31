@@ -40,9 +40,13 @@ const loginByAccount = rateLimit({ windowMs: 15 * MIN, max: 5, skipSuccessful: t
   message: "Too many failed logins for this account. Please wait 15 minutes and try again." });
 const signupByIp = rateLimit({ windowMs: 60 * MIN, max: 10, key: (req) => `ip:${req.ip}`,
   message: "Too many sign-ups from this address. Please try again later." });
+// Password change: failed attempts per account (guessing the current password with a
+// stolen token). Successful changes don't count.
+const passwordChange = rateLimit({ windowMs: 15 * MIN, max: 5, skipSuccessful: true, key: (req) => req.user && `user:${req.user.id}`,
+  message: "Too many failed attempts. Please wait 15 minutes and try again." });
 // Checkout: every create call makes a PayPal order, so cap it per user.
 const checkoutCreate = rateLimit({ windowMs: 10 * MIN, max: 10, key: (req) => req.user && `user:${req.user.id}`,
   message: "Too many payment attempts. Please wait a few minutes and try again." });
 const checkoutCapture = rateLimit({ windowMs: 10 * MIN, max: 20, key: (req) => req.user && `user:${req.user.id}` });
 
-module.exports = { rateLimit, loginByIp, loginByAccount, signupByIp, checkoutCreate, checkoutCapture };
+module.exports = { rateLimit, loginByIp, loginByAccount, signupByIp, passwordChange, checkoutCreate, checkoutCapture };

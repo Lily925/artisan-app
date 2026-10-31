@@ -5,6 +5,9 @@ const userSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     passwordHash: { type: String, required: true },
+    // Bumped on every password change; tokens carry the version they were issued with
+    // ("tv") and stop working once it no longer matches (see middleware/auth).
+    tokenVersion: { type: Number, default: 0 },
     role: { type: String, enum: ["buyer", "artisan", "admin"], default: "buyer" },
     // Profile photo (Cloudinary https URL, "/uploads/avatars/..." on local dev storage, or ""
     // for none; see utils/imageStorage) and a short bio. Public only for artisans (populated

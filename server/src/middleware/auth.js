@@ -5,7 +5,8 @@ const User = require("../models/User");
 // Resolves the Bearer token to { id, role } from the database, or null when there's
 // no usable token. A valid signature isn't enough: the account may have been deleted
 // (e.g. by a re-seed) since the token was issued. Role also comes from the database so
-// a role change takes effect without waiting for the token to expire.
+// a role change takes effect without waiting for the token to expire. Tokens issued before
+// the last password change (older tokenVersion; tokens without "tv" count as 0) are refused.
 async function userFromToken(req) {
   const header = req.headers.authorization || "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : null;
@@ -18,8 +19,9 @@ async function userFromToken(req) {
     return { error: "Invalid or expired token" };
   }
 
-  const user = mongoose.isValidObjectId(payload.id) ? await User.findById(payload.id).select("role") : null;
+  const user = mongoose.isValidObjectId(payload.id) ? await User.findById(payload.id).select("role tokenVersion") : null;
   if (!user) return { error: "Account no longer exists" };
+  if ((payload.tv ?? 0) !== (user.tokenVersion ?? 0)) return { error: "Invalid or expired token" };
   return { user: { id: user._id.toString(), role: user.role } };
 }
 

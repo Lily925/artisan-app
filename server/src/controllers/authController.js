@@ -5,7 +5,7 @@ const { SEED_PASSWORD } = require("../config/constants");
 
 function signToken(user) {
   return jwt.sign(
-    { id: user._id.toString(), role: user.role },
+    { id: user._id.toString(), role: user.role, tv: user.tokenVersion || 0 },
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRES_IN || "7d", algorithm: "HS256" }
   );
@@ -76,4 +76,35 @@ async function login(req, res) {
   res.json({ token, user: toPublicUser(user) });
 }
 
-module.exports = { signup, login };
+// PUT /api/auth/password { currentPassword, newPassword }. Every failure is a 400 (not 401,
+// which the client treats as "logged out"); the code tells the client which message to show.
+// On success all earlier tokens stop working and this session gets a fresh one.
+async function changePassword(req, res) {
+  const currentPassword = str(req.body?.currentPassword);
+  const newPassword = str(req.body?.newPassword);
+  if (!currentPassword || !newPassword || currentPassword.length > PASSWORD_MAX) {
+    return res.status(400).json({ error: "Current and new password are required", code: "MISSING_FIELDS" });
+  }
+  if (newPassword.length < PASSWORD_MIN || newPassword.length > PASSWORD_MAX) {
+    return res.status(400).json({ error: `Password must be ${PASSWORD_MIN}-${PASSWORD_MAX} characters`, code: "BAD_NEW_PASSWORD" });
+  }
+  if (seedPasswordBlocked(newPassword)) return res.status(400).json({ error: "Please choose a different password", code: "WEAK_PASSWORD" });
+
+  const user = await User.findById(req.user.id);
+  if (!user) return res.status(401).json({ error: "Account no longer exists" });
+  if (!(await bcrypt.compare(currentPassword, user.passwordHash))) {
+    return res.status(400).json({ error: "Current password is incorrect", code: "WRONG_PASSWORD" });
+  }
+  // Compared against the hash, so a new password matching the old one in bcrypt's first
+  // 72 bytes also counts as the same.
+  if (newPassword === currentPassword || (await bcrypt.compare(newPassword, user.passwordHash))) {
+    return res.status(400).json({ error: "New password must be different from the current one", code: "SAME_PASSWORD" });
+  }
+
+  user.passwordHash = await bcrypt.hash(newPassword, 10);
+  user.tokenVersion = (user.tokenVersion || 0) + 1;
+  await user.save();
+  res.json({ token: signToken(user), user: toPublicUser(user) });
+}
+
+module.exports = { signup, login, changePassword };

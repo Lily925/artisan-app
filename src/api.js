@@ -64,6 +64,9 @@ export const api = {
     request("/auth/signup", { method: "POST", body: { name, email, password, role } }),
   login: (email, password) =>
     request("/auth/login", { method: "POST", body: { email, password } }),
+  // Own account. Returns { token, user }: earlier tokens stop working, so store the new one.
+  changePassword: (currentPassword, newPassword) =>
+    request("/auth/password", { method: "PUT", auth: true, body: { currentPassword, newPassword } }),
 
   // Own profile only (the server refuses any other id). data: { bio } as JSON, or a
   // FormData with "photo" (File, JPG/PNG/WebP up to 2 MB) and/or "removePhoto" = "true".

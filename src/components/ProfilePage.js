@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { COLORS, FONT_SERIF, FONT_SANS } from "../theme";
 import { api } from "../api";
 import ProfileCard from "./ProfileCard";
+import ChangePasswordForm from "./ChangePasswordForm";
 import ProductCard from "./ProductCard";
 
 const RECENT_SHOP_ORDERS = 5;
@@ -157,6 +158,7 @@ export default function ProfilePage({
                 <button type="button" className="a-btn-outline" style={actionBtn} onClick={() => navigate("my-commissions")}>{t.commissions.mineOpen}</button>
               </div>
             </ProfileCard>
+            <ChangePasswordForm t={t} onApiError={onApiError} />
             <button type="button" className="a-btn-outline" style={{ width:"100%", borderColor:COLORS.accentDark, color:COLORS.accentDark }} onClick={logout}>
               {t.logout}
             </button>
