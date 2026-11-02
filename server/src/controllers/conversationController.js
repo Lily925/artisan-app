@@ -5,9 +5,7 @@ const Artisan = require("../models/Artisan");
 const Product = require("../models/Product");
 const Order = require("../models/Order");
 const User = require("../models/User");
-const Notification = require("../models/Notification");
 const { isShopLive } = require("../utils/shops");
-const { notifyNewMessage } = require("../utils/notify");
 const { orderArtisanId } = require("./orderController");
 
 // Buyer-to-shop chat. Only the conversation's buyer and the shop's owner get anywhere here;
@@ -203,7 +201,7 @@ async function sendMessage(req, res) {
   const text = cleanText(req.body?.text);
   if (!text) return res.status(400).json({ error: "Write a message first", code: "EMPTY_MESSAGE" });
   if (text.length > MESSAGE_MAX) return res.status(400).json({ error: `Messages can be up to ${MESSAGE_MAX} characters`, code: "MESSAGE_TOO_LONG" });
-  const shop = await Artisan.findById(conversation.shop).select("status shopName user");
+  const shop = await Artisan.findById(conversation.shop).select("status");
   if (!isShopLive(shop)) return shopNotOpen(res);
 
   const message = await Message.create({ conversation: conversation._id, sender: req.user.id, text });
@@ -211,9 +209,6 @@ async function sendMessage(req, res) {
     $set: { lastMessageAt: message.createdAt, lastMessageText: text.slice(0, PREVIEW), lastMessageSender: req.user.id },
     $inc: { [isBuyer ? "shopUnread" : "buyerUnread"]: 1 },
   });
-  // The other side's name only: the message text stays out of notifications.
-  const senderName = isBuyer ? (await User.findById(req.user.id).select("name").lean())?.name : shop.shopName;
-  await notifyNewMessage(isBuyer ? shop.user : conversation.buyer, conversation._id, senderName);
   res.status(201).json({ message: messageView(message, req.user.id) });
 }
 
@@ -226,7 +221,6 @@ async function markRead(req, res) {
   await Promise.all([
     Message.updateMany({ conversation: conversation._id, sender: { $ne: req.user.id }, readAt: null }, { $set: { readAt: now } }),
     Conversation.updateOne({ _id: conversation._id }, { $set: { [isBuyer ? "buyerUnread" : "shopUnread"]: 0 } }),
-    Notification.updateMany({ user: req.user.id, type: "new_message", "params.conversationId": String(conversation._id), readAt: null }, { $set: { readAt: now } }),
   ]);
   res.json({ unread: 0 });
 }

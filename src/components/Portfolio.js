@@ -42,7 +42,7 @@ const CSS = `
 `;
 
 // The first row is visible right away, so it loads eagerly; the rest lazily.
-function ProductTile({ product, name, price, tiers, tierName, liked, likeLabel, onToggleSave, onOpen, eager }) {
+function ProductTile({ product, name, price, tiers, tierName, liked, likeLabel, onToggleSave, onOpen, eager, canLike }) {
   const likeCount = product.likeCount || 0;
   return (
     <article className="pf-card">
@@ -52,11 +52,11 @@ function ProductTile({ product, name, price, tiers, tierName, liked, likeLabel, 
             <ProductImage src={product.images?.[0]} alt={name} eager={eager} />
           </span>
         </button>
-        <button type="button" className="a-wishlist-btn" aria-label={`${likeLabel} (${likeCount})`} aria-pressed={liked}
+        {canLike && <button type="button" className="a-wishlist-btn" aria-label={`${likeLabel} (${likeCount})`} aria-pressed={liked}
           onClick={(e) => { e.stopPropagation(); onToggleSave(product.id, e); }}>
           <span aria-hidden="true">{liked ? "❤️" : "🤍"}</span>
           {likeCount > 0 && <span aria-hidden="true" className="a-like-count">{likeCount}</span>}
-        </button>
+        </button>}
       </div>
       <button type="button" className="pf-card-open" onClick={() => onOpen(product)} tabIndex={-1} aria-hidden="true"
         style={{ padding:"16px 16px 18px", display:"flex", flexDirection:"column", gap:10, flex:1 }}>
@@ -203,7 +203,7 @@ export default function Portfolio({ lang, t, artisan, products, savedItems, togg
                   return (
                     <ProductTile key={p.id} product={p} name={nameOf(p)} price={fmtBasic(p)} tiers={offeredTiers(p)} tierName={t.orders.tierName}
                       liked={liked} likeLabel={liked ? t.homePage.wishlistRemove : t.homePage.wishlistAdd}
-                      onToggleSave={toggleSave} onOpen={openProduct} eager={i < 4} />
+                      onToggleSave={toggleSave} onOpen={openProduct} eager={i < 4} canLike={!isOwner} />
                   );
                 })}
               </div>

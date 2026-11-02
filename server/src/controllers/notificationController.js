@@ -1,19 +1,21 @@
 const mongoose = require("mongoose");
 const Notification = require("../models/Notification");
 const { unreadMessagesFor } = require("./conversationController");
+const { NOTIFICATION_TYPES } = require("../utils/notify");
 
 const LATEST = 30;
 
 const view = (n) => ({ id: n._id, type: n.type, params: n.params || {}, link: n.link || "", readAt: n.readAt || null, createdAt: n.createdAt });
-const unreadCount = (user) => Notification.countDocuments({ user, readAt: null });
+const shown = { type: { $in: NOTIFICATION_TYPES } };
+const unreadCount = (user) => Notification.countDocuments({ user, readAt: null, ...shown });
 
 // Every query below is limited to the caller (req.user comes from the token).
 // GET /api/notifications: the latest 30, and how many are unread in total.
 async function listNotifications(req, res) {
   const [items, unread, unreadMessages] = await Promise.all([
-    Notification.find({ user: req.user.id }).sort({ createdAt: -1, _id: -1 }).limit(LATEST).lean(),
+    Notification.find({ user: req.user.id, ...shown }).sort({ createdAt: -1, _id: -1 }).limit(LATEST).lean(),
     unreadCount(req.user.id),
-    req.user.role === "admin" ? 0 : unreadMessagesFor(req.user.id), // the Messages badge, in the same poll
+    req.user.role === "admin" ? 0 : unreadMessagesFor(req.user.id), // the chat icon's own badge, in the same poll
   ]);
   res.json({ items: items.map(view), unreadCount: unread, unreadMessages });
 }

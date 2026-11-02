@@ -216,14 +216,13 @@ try {
   r = await read(ownerT, id);
   check("…the artisan gets the same characters back", r.type.startsWith("application/json") && r.body.messages.at(-1).text === html);
 
-  // ── counters and notifications ──
+  // ── counters: messages have their own badge, and never reach the bell ──
   r = await bell(ownerT);
-  let note = r.body.items.filter((n) => n.type === "new_message" && n.params.conversationId === id);
-  check("the artisan has one unread notification for the chat, however many messages", note.length === 1 && note[0].params.count === 3 && note[0].link === `/messages/${id}`, JSON.stringify(note));
-  check("…naming the buyer by display name, no message text", note[0]?.params.name === "Chat Buyer Name" && !JSON.stringify(note).includes("available"));
-  check("…counted in the bell", r.body.unreadCount === 1, `${r.body.unreadCount}`);
-  check("…and the Messages badge counts the messages", r.body.unreadMessages === 3, `${r.body.unreadMessages}`);
-  check("the sender isn't notified", !(await bell(buyerT)).body.items.some((n) => n.type === "new_message"));
+  check("the chat badge counts the artisan's unread messages", r.body.unreadMessages === 3, `${r.body.unreadMessages}`);
+  check("…the bell stays empty and its count at 0", r.body.items.length === 0 && r.body.unreadCount === 0, JSON.stringify(r.body));
+  check("…no notification is stored for a message, for either side", (await Notification.countDocuments({ user: { $in: [owner._id, buyer._id] } })) === 0);
+  r = await bell(buyerT);
+  check("the sender has nothing unread", r.body.unreadMessages === 0 && r.body.items.length === 0);
   r = await list(ownerT);
   let row = r.body.conversations.find((c) => c.id === id);
   check("artisan's list: buyer's display name, preview, unread", row?.other?.name === "Chat Buyer Name" && row?.other?.photo === "" && row?.unread === 3 && row?.preview === html.slice(0, 120) && row?.role === "artisan", JSON.stringify(row));
@@ -252,8 +251,7 @@ try {
   r = await read(buyerT, id);
   check("the buyer sees the reply from the other side, unread", r.body.messages.at(-1).id === replyId && r.body.messages.at(-1).mine === false && r.body.conversation.unread === 1);
   r = await bell(buyerT);
-  note = r.body.items.filter((n) => n.type === "new_message");
-  check("the buyer is notified, by the shop's name only", note.length === 1 && note[0].params.name === shop.shopName && r.body.unreadMessages === 1 && !JSON.stringify(note).includes("Chat Owner Name"));
+  check("the reply shows on the buyer's chat badge, not the bell", r.body.unreadMessages === 1 && r.body.unreadCount === 0 && r.body.items.length === 0);
   r = await read(ownerT, id);
   check("the reply isn't read yet", r.body.messages.at(-1).readAt === null);
   await markRead(buyerT, id);
@@ -261,8 +259,11 @@ try {
   check("marking as read only touched the other side's messages", (await Message.findById(firstId)).readAt !== null);
   await send(buyerT, id, "one more");
   r = await bell(ownerT);
-  note = r.body.items.filter((n) => n.type === "new_message" && !n.readAt);
-  check("a message after reading makes a fresh notification", note.length === 1 && note[0].params.count === 1);
+  check("a message after reading raises only the chat badge", r.body.unreadMessages === 1 && r.body.unreadCount === 0);
+  await Notification.create({ user: owner._id, type: "new_message", params: { conversationId: id, name: "Old", count: 2 }, link: `/messages/${id}` });
+  r = await bell(ownerT);
+  check("an older message notification in the database stays out of the bell and its count", r.body.items.length === 0 && r.body.unreadCount === 0);
+  await Notification.deleteMany({ user: owner._id, type: "new_message" });
 
   // ── only participants ──
   const others = [["another buyer", strangerT], ["another artisan", otherOwnerT], ["an admin", adminT]];

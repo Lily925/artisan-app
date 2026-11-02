@@ -1,9 +1,10 @@
 import { COLORS, FONT_SERIF, FONT_SANS } from "../theme";
 import { placeholderEmoji } from "../placeholders";
 import ProductCard from "./ProductCard";
+import { isOwnProduct } from "../artisanInfo";
 import Footer from "./Footer";
 
-export default function Shop({ lang, t, filtered, loading, category, searchQuery, clearSearch, openShop, savedItems, toggleSave, openProduct, fmt, navigate }) {
+export default function Shop({ currentUserId, lang, t, filtered, loading, category, searchQuery, clearSearch, openShop, savedItems, toggleSave, openProduct, fmt, navigate }) {
   const shop = t.shopPage;
   const home = t.homePage;
   const chips = [{ key: "", label: shop.allCategories }, ...t.productCategories];
@@ -64,6 +65,7 @@ export default function Shop({ lang, t, filtered, loading, category, searchQuery
                 nameEn={p.titleEn}
                 lang={lang}
                 isSaved={savedItems.includes(p.id)}
+                isOwn={isOwnProduct(p, currentUserId)}
                 onToggleSave={toggleSave}
                 onOpen={openProduct}
                 price={fmt(p)}

@@ -7,6 +7,9 @@ import { assetUrl } from "./api";
 const IG_HANDLE = /^[A-Za-z0-9._]{1,30}$/;
 const PHOTO_URL = /^https?:\/\/\S+$|^\/\S*$/;
 
+// Is this the signed-in user's own product? They can't favorite it, so it gets no heart.
+export const isOwnProduct = (product, userId) => Boolean(userId) && String(product?.artisan?.user?._id) === String(userId);
+
 export function artisanInfo(artisan) {
   const ownerName = artisan?.user?.name || "";
   const shopName = artisan?.shopName || "";

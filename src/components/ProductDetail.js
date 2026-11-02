@@ -155,7 +155,7 @@ export default function ProductDetail({ lang, t, selected, savedItems, toggleSav
               <button type="button" className="a-btn-primary" style={{ flex:1 }} onClick={handleAddToCart}>
                 {d.addToCart(selectedTierPrice)}
               </button>
-              <button
+              {!isOwner && <button
                 type="button"
                 className="a-icon-only-btn"
                 aria-label={`${isSaved ? t.homePage.wishlistRemove : t.homePage.wishlistAdd} (${likeCount})`}
@@ -165,7 +165,7 @@ export default function ProductDetail({ lang, t, selected, savedItems, toggleSav
               >
                 <span aria-hidden="true">{isSaved ? "❤️" : "🤍"}</span>
                 {likeCount > 0 && <span aria-hidden="true" className="a-like-count">{likeCount}</span>}
-              </button>
+              </button>}
             </div>
 
             <div className="a-callout" style={{ marginBottom:24 }}>

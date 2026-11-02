@@ -22,6 +22,7 @@ import ShopStatusBanner from "./components/ShopStatusBanner";
 import AdminShops from "./components/AdminShops";
 import Messages from "./components/Messages";
 import ProductCard from "./components/ProductCard";
+import { isOwnProduct } from "./artisanInfo";
 import { useNotifications } from "./useNotifications";
 import { parseLink } from "./notificationHelpers";
 
@@ -471,7 +472,7 @@ export default function App() {
     const target = parseLink(link);
     if (!target) return;
     if (target.orderId) openOrder(target.orderId);
-    else if (target.conversationId) openChat(target.conversationId);
+    else if (target.productId) openProductById(target.productId);
     else if (target.page) { navigate(target.page); window.scrollTo(0, 0); }
   };
   const openChat = (id) => { setChatRequest({ id }); navigate("messages"); window.scrollTo(0, 0); };
@@ -613,7 +614,7 @@ export default function App() {
       {/* ── HOME ── */}
       {page==="home" && (
         <Home
-          lang={lang} t={t} prods={publicProducts}
+          lang={lang} t={t} prods={publicProducts} currentUserId={currentUser?.id}
           savedItems={savedItems} toggleSave={toggleSave} openProduct={openProduct}
           fmt={fmtBasic} navigate={navigate} openShop={openShop}
         />
@@ -621,7 +622,7 @@ export default function App() {
 
       {page==="shop" && (
         <Shop
-          lang={lang} t={t} filtered={filtered} loading={categoryLoading}
+          lang={lang} t={t} filtered={filtered} loading={categoryLoading} currentUserId={currentUser?.id}
           category={shopCategory} openShop={openShop}
           searchQuery={searchQuery} clearSearch={() => setSearchQuery("")}
           savedItems={savedItems} toggleSave={toggleSave} openProduct={openProduct}
@@ -768,7 +769,7 @@ export default function App() {
                 {products.filter(p => savedItems.includes(p.id)).map(p => (
                   <ProductCard
                     key={p.id} product={p} nameMn={p.title} nameEn={p.titleEn} lang={lang}
-                    isSaved onToggleSave={toggleSave} onOpen={openProduct} price={fmtBasic(p)}
+                    isOwn={isOwnProduct(p, currentUser?.id)} isSaved onToggleSave={toggleSave} onOpen={openProduct} price={fmtBasic(p)}
                     certifiedLabel={t.homePage.certified} wishlistAddLabel={t.homePage.wishlistAdd} wishlistRemoveLabel={t.homePage.wishlistRemove}
                   />
                 ))}

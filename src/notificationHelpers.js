@@ -21,17 +21,17 @@ export function notificationText(t, notification, fmtAmt) {
 }
 
 const ID = "([0-9a-f]{24})";
-const PAGES = { "/my-commissions": "my-commissions", "/commission-board": "commission-board", "/profile": "profile", "/admin/shops": "admin-shops", "/messages": "messages" };
+const PAGES = { "/my-commissions": "my-commissions", "/commission-board": "commission-board", "/profile": "profile", "/admin/shops": "admin-shops" };
 
-// In-app path -> where to go: { page }, { orderId } or { conversationId }. Null for anything
+// In-app path -> where to go: { page }, { orderId } or { productId }. Null for anything
 // else, so a stored link can only ever open one of the app's own pages.
 export function parseLink(link) {
   if (typeof link !== "string") return null;
   if (Object.hasOwn(PAGES, link)) return { page: PAGES[link] };
   const order = new RegExp(`^/orders/${ID}$`).exec(link);
   if (order) return { orderId: order[1] };
-  const conversation = new RegExp(`^/messages/${ID}$`).exec(link);
-  return conversation ? { conversationId: conversation[1] } : null;
+  const product = new RegExp(`^/products/${ID}$`).exec(link);
+  return product ? { productId: product[1] } : null;
 }
 
 export const badgeText = (count) => (count > 9 ? "9+" : String(count));

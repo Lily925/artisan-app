@@ -14,5 +14,7 @@ const notificationSchema = new mongoose.Schema({
 
 notificationSchema.index({ user: 1, createdAt: -1 }); // the latest 30
 notificationSchema.index({ user: 1, readAt: 1, createdAt: -1 }); // the unread count
+// One "saved" notification per product (see notifyProductSaved).
+notificationSchema.index({ user: 1, "params.productId": 1 }, { unique: true, partialFilterExpression: { type: "product_saved" } });
 
 module.exports = mongoose.model("Notification", notificationSchema);

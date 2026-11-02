@@ -4,6 +4,7 @@ import { api } from "../api";
 import ProfileCard from "./ProfileCard";
 import ChangePasswordForm from "./ChangePasswordForm";
 import ProductCard from "./ProductCard";
+import { isOwnProduct } from "../artisanInfo";
 import CountBadge from "./CountBadge";
 
 const RECENT_SHOP_ORDERS = 5;
@@ -117,7 +118,7 @@ export default function ProfilePage({
       )}
       <ProductCard
       product={p} nameMn={p.title} nameEn={p.titleEn} lang={lang}
-      isSaved={savedItems.includes(p.id)} onToggleSave={toggleSave} onOpen={openProduct} price={fmtBasic(p)}
+      isOwn={isOwnProduct(p, user.id)} isSaved={savedItems.includes(p.id)} onToggleSave={toggleSave} onOpen={openProduct} price={fmtBasic(p)}
       certifiedLabel={t.homePage.certified} wishlistAddLabel={t.homePage.wishlistAdd} wishlistRemoveLabel={t.homePage.wishlistRemove}
     />
     </div>

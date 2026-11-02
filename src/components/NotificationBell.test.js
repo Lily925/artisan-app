@@ -130,7 +130,7 @@ test('every notification type has text in all three languages, none stored', () 
     const t = i18n[lang];
     expect(Object.keys(t.notifications.text).sort()).toEqual([...types].sort());
     for (const type of types) {
-      const text = notificationText(t, { type, params: { shopName: 'S', units: 2, category: 'wood', amount: 5, percent: 30, reason: 'R', name: 'N', count: 2 } }, (n) => `$${n}`);
+      const text = notificationText(t, { type, params: { shopName: 'S', units: 2, category: 'wood', amount: 5, percent: 30, reason: 'R', title: 'Гутал', titleEn: 'Boots', count: 2 } }, (n) => `$${n}`);
       expect(text).toBeTruthy();
       expect(text).not.toMatch(/undefined|NaN/);
     }
@@ -148,6 +148,8 @@ test('relative times and in-app links', () => {
 
   expect(parseLink(`/orders/${ID}`)).toEqual({ orderId: ID });
   expect(parseLink('/admin/shops')).toEqual({ page: 'admin-shops' });
+  expect(parseLink(`/products/${ID}`)).toEqual({ productId: ID });
+  expect(parseLink(`/messages/${ID}`)).toBeNull(); // messages have no bell items
   for (const bad of ['https://evil.example', '//evil.example', 'javascript:alert(1)', '/orders/1', '/unknown', '', null]) {
     expect(parseLink(bad)).toBeNull();
   }
