@@ -11,6 +11,7 @@ const AFTER_ACTION_MS = 400; // an action can be several requests: refresh once,
 export function useNotifications(enabled, onApiError) {
   const [items, setItems] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadMessages, setUnreadMessages] = useState(0); // the Messages badge
   const [failed, setFailed] = useState(false);
   const onError = useRef(onApiError);
   useEffect(() => { onError.current = onApiError; });
@@ -29,6 +30,7 @@ export function useNotifications(enabled, onApiError) {
         if (started !== session.current) return;
         setItems(res.items || []);
         setUnreadCount(res.unreadCount || 0);
+        setUnreadMessages(res.unreadMessages || 0);
         setFailed(false);
       })
       .catch((err) => { if (started === session.current) handleError(err); });
@@ -37,7 +39,7 @@ export function useNotifications(enabled, onApiError) {
   useVisiblePolling(refresh, POLL_MS, enabled);
 
   useEffect(() => {
-    if (!enabled) { session.current += 1; setItems([]); setUnreadCount(0); setFailed(false); return undefined; }
+    if (!enabled) { session.current += 1; setItems([]); setUnreadCount(0); setUnreadMessages(0); setFailed(false); return undefined; }
     let timer = null;
     const onAct = () => { clearTimeout(timer); timer = setTimeout(refresh, AFTER_ACTION_MS); };
     window.addEventListener(USER_ACTED_EVENT, onAct);
@@ -59,5 +61,5 @@ export function useNotifications(enabled, onApiError) {
     return api.markAllNotificationsRead().catch((err) => { handleError(err); refresh(); });
   }, [handleError, refresh]);
 
-  return { items, unreadCount, failed, refresh, markRead, markAllRead };
+  return { items, unreadCount, unreadMessages, failed, refresh, markRead, markAllRead };
 }

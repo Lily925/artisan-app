@@ -149,6 +149,20 @@ export const api = {
   markNotificationRead: (id) => request(`/notifications/${id}/read`, { method: "POST", auth: true }),
   markAllNotificationsRead: () => request("/notifications/read-all", { method: "POST", auth: true }),
 
+  // Chat. target: { shopId } | { productId } | { orderId }: the caller's conversation with
+  // that shop, created on first use. Returns { conversation, created }.
+  startConversation: (target) => request("/conversations", { method: "POST", auth: true, body: target }),
+  getConversations: () => request("/conversations", { auth: true }),
+  // { conversation, card, messages (oldest first), hasMore }; before = a message id, for older ones
+  getConversationMessages: (id, before) =>
+    request(`/conversations/${id}/messages${before ? `?before=${encodeURIComponent(before)}` : ""}`, { auth: true }),
+  sendConversationMessage: (id, text) =>
+    request(`/conversations/${id}/messages`, { method: "POST", auth: true, body: { text } }),
+  markConversationRead: (id) => request(`/conversations/${id}/read`, { method: "POST", auth: true }),
+  // Own shop: { savedReplies, greeting }
+  getChatSettings: () => request("/artisans/me/chat-settings", { auth: true }),
+  updateChatSettings: (data) => request("/artisans/me/chat-settings", { method: "PUT", auth: true, body: data }),
+
   // Admin only. status: "pending" | "approved" | "rejected" | "suspended" (omit for all).
   getAdminShops: (status) => request(`/admin/shops${status ? `?status=${status}` : ""}`, { auth: true }),
   // action: "approve" | "reject" | "suspend" | "unsuspend"; reason (optional) for reject / suspend

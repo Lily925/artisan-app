@@ -9,7 +9,7 @@ import { bonusText, offeredTiers } from "../tiers";
 
 const TIER_DISPLAY = { basic: "Basic", story: "Story", patron: "Patron" };
 
-export default function ProductDetail({ lang, t, selected, savedItems, toggleSave, addToCart, fmtAmt, navigate, openStorefront, openArtisanProfile, currentUserId, canEdit = true, onEdit, onDelete }) {
+export default function ProductDetail({ lang, t, selected, savedItems, toggleSave, addToCart, fmtAmt, navigate, openStorefront, openArtisanProfile, currentUserId, canEdit = true, onEdit, onDelete, onMessageShop }) {
   const [selectedTier, setSelectedTier] = useState("basic");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -148,6 +148,9 @@ export default function ProductDetail({ lang, t, selected, savedItems, toggleSav
               </div>
             </div>
 
+            {onMessageShop && !isOwner && (
+              <button type="button" className="a-btn-outline" style={{ width:"100%", marginBottom:10 }} onClick={onMessageShop}>{t.messages.messageShop}</button>
+            )}
             <div style={{ display:"flex", gap:10, marginBottom:20 }}>
               <button type="button" className="a-btn-primary" style={{ flex:1 }} onClick={handleAddToCart}>
                 {d.addToCart(selectedTierPrice)}

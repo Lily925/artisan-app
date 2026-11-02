@@ -20,6 +20,7 @@ const paymentRoutes = require("./routes/paymentRoutes");
 const userRoutes = require("./routes/userRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
+const conversationRoutes = require("./routes/conversationRoutes");
 
 const app = express();
 app.disable("x-powered-by");
@@ -64,6 +65,7 @@ app.use("/api/payments", paymentRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/conversations", conversationRoutes);
 
 app.use((req, res) => res.status(404).json({ error: "Not found" }));
 

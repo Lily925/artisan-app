@@ -119,4 +119,38 @@ async function updateMyArtisan(req, res) {
   res.json({ ...artisan.toJSON(), payoutOrdersProcessed: payoutsSent });
 }
 
-module.exports = { listArtisans, getArtisan, getMyArtisan, setupMyShop, updateMyArtisan };
+// ── Chat settings: saved replies and the automatic greeting (own shop only) ──
+const SAVED_REPLIES_MAX = 10;
+const CHAT_TEXT_MAX = 300;
+const chatSettingsView = (a) => ({ savedReplies: a.savedReplies || [], greeting: a.chatGreeting || "" });
+
+async function getChatSettings(req, res) {
+  const artisan = await Artisan.findOne({ user: req.user.id }).select("+savedReplies +chatGreeting");
+  if (!artisan) return res.status(404).json({ error: "No artisan profile is linked to this account" });
+  res.json(chatSettingsView(artisan));
+}
+
+// PUT { savedReplies?: [text], greeting?: text }. A list replaces the saved one; blanks are dropped.
+async function updateChatSettings(req, res) {
+  const { savedReplies, greeting } = req.body || {};
+  const set = {};
+  if (savedReplies !== undefined) {
+    if (!Array.isArray(savedReplies) || savedReplies.some((r) => typeof r !== "string")) {
+      return res.status(400).json({ error: "savedReplies must be a list of text", code: "BAD_REPLIES" });
+    }
+    const replies = savedReplies.map((r) => r.trim()).filter(Boolean);
+    if (replies.length > SAVED_REPLIES_MAX) return res.status(400).json({ error: `You can save up to ${SAVED_REPLIES_MAX} replies`, code: "TOO_MANY_REPLIES" });
+    if (replies.some((r) => r.length > CHAT_TEXT_MAX)) return res.status(400).json({ error: `A saved reply can be up to ${CHAT_TEXT_MAX} characters`, code: "REPLY_TOO_LONG" });
+    set.savedReplies = replies;
+  }
+  if (greeting !== undefined) {
+    if (typeof greeting !== "string") return res.status(400).json({ error: "greeting must be text", code: "BAD_GREETING" });
+    if (greeting.trim().length > CHAT_TEXT_MAX) return res.status(400).json({ error: `The greeting can be up to ${CHAT_TEXT_MAX} characters`, code: "GREETING_TOO_LONG" });
+    set.chatGreeting = greeting.trim();
+  }
+  const artisan = await Artisan.findOneAndUpdate({ user: req.user.id }, { $set: set }, { new: true }).select("+savedReplies +chatGreeting");
+  if (!artisan) return res.status(404).json({ error: "No artisan profile is linked to this account" });
+  res.json(chatSettingsView(artisan));
+}
+
+module.exports = { listArtisans, getArtisan, getMyArtisan, setupMyShop, updateMyArtisan, getChatSettings, updateChatSettings };

@@ -20,6 +20,7 @@ import ProfilePage from "./components/ProfilePage";
 import ShopSetup from "./components/ShopSetup";
 import ShopStatusBanner from "./components/ShopStatusBanner";
 import AdminShops from "./components/AdminShops";
+import Messages from "./components/Messages";
 import ProductCard from "./components/ProductCard";
 import { useNotifications } from "./useNotifications";
 import { parseLink } from "./notificationHelpers";
@@ -294,6 +295,7 @@ export default function App() {
   const [cart, setCart] = useState(null);
   const [orders, setOrders] = useState([]);
   const [orderView, setOrderView] = useState(null); // { id, back }: the order detail page and where "Back" goes
+  const [chatRequest, setChatRequest] = useState(null); // { id }: the conversation the Messages page should open
   const [searchQuery, setSearchQuery] = useState("");
   const [toast, setToast] = useState(null);
   const [rates, setRates] = useState({ MNT: 3450, KRW: 1380 });
@@ -452,8 +454,23 @@ export default function App() {
     const target = parseLink(link);
     if (!target) return;
     if (target.orderId) openOrder(target.orderId);
+    else if (target.conversationId) openChat(target.conversationId);
     else if (target.page) { navigate(target.page); window.scrollTo(0, 0); }
   };
+  const openChat = (id) => { setChatRequest({ id }); navigate("messages"); window.scrollTo(0, 0); };
+  // "Message shop" / "Message the artisan" / "Message the buyer". target: { shopId } | { productId } | { orderId }
+  const startChat = (target) =>
+    api.startConversation(target)
+      .then(({ conversation }) => openChat(conversation.id))
+      .catch((err) => {
+        if (err.status === 401) return handleApiError(err);
+        return showToast(t.messages.errors[err.code] || t.messages.errors.generic);
+      });
+  // From a chat's product card: read it fresh, it may not be in the loaded catalog.
+  const openProductById = (id) =>
+    api.getProduct(id)
+      .then((p) => { openProduct({ ...p, id: p._id }); window.scrollTo(0, 0); })
+      .catch((err) => (err.status === 401 ? handleApiError(err) : showToast(t.messages.errors.generic)));
 
   const submitCommission = (data) =>
     api.createCommission(data).catch((err) => {
@@ -559,7 +576,7 @@ export default function App() {
         onSearchSubmit={() => navigate("shop")}
         cartCount={cartCount} wishlistCount={savedItems.length}
         currentUser={{ ...currentUser, avatar: currentUserAvatar }} navigate={navigate} t={t}
-        notifications={notifications} fmtAmt={fmtAmt} onOpenLink={openLink}
+        notifications={notifications} fmtAmt={fmtAmt} onOpenLink={openLink} compact={page==="messages"}
       />
 
       {isArtisan && !shopSetupNeeded && <ShopStatusBanner t={t} status={shopStatus.status} reason={shopStatus.reason} />}
@@ -597,6 +614,7 @@ export default function App() {
           toggleSave={toggleSave} addToCart={addToCart} fmtAmt={fmtAmt}
           navigate={navigate} openStorefront={openStorefront} openArtisanProfile={openArtisanProfile}
           currentUserId={currentUser.id} canEdit={shopLive}
+          onMessageShop={currentUser.role==="buyer" ? () => startChat({ productId: selected.id }) : undefined}
           onEdit={() => { navigate("edit-product"); window.scrollTo(0, 0); }}
           onDelete={deleteOwnProduct}
         />
@@ -612,6 +630,7 @@ export default function App() {
             savedItems={savedItems} toggleSave={toggleSave} openProduct={openProduct}
             fmtBasic={fmtBasic} navigate={navigate} onBack={goBack}
             focus={page==="artisan-profile" ? "about" : undefined}
+            onMessageShop={currentUser.role==="buyer" ? () => startChat({ shopId: a._id }) : undefined}
           />
         );
       })()}
@@ -652,7 +671,7 @@ export default function App() {
         <OrderDetail
           key={orderView.id} t={t} lang={lang} orderId={orderView.id} fmtAmt={fmtAmt}
           onBack={() => navigate(orderView.back)} onApiError={handleApiError} showToast={showToast}
-          onChanged={refreshOrders}
+          onChanged={refreshOrders} onMessage={() => startChat({ orderId: orderView.id })}
         />
       )}
 
@@ -669,7 +688,7 @@ export default function App() {
 
       {page==="shop-settings" && currentUser.role==="artisan" && !showShopSetup && (
         <ArtisanProfileForm
-          key={pageKey} t={t} navigate={navigate} onApiError={handleApiError} canAddProducts={shopLive}
+          key={pageKey} t={t} navigate={navigate} onApiError={handleApiError} canAddProducts={shopLive} showToast={showToast}
           onSaved={() => { showToast(t.shopSettings.saved); refreshProducts(); }}
         />
       )}
@@ -679,6 +698,13 @@ export default function App() {
           <p role="status" style={{ fontFamily:FONT_SANS, fontSize:15, color:COLORS.ink, marginTop:12 }}>{t.shopStatus.cantPublish}</p>
           <button type="button" className="a-btn-outline" style={{ marginTop:16 }} onClick={() => navigate("profile")}>{t.profile}</button>
         </div>
+      )}
+
+      {page==="messages" && currentUser.role!=="admin" && (
+        <Messages
+          t={t} lang={lang} fmtAmt={fmtAmt} openRequest={chatRequest} navigate={navigate} onApiError={handleApiError}
+          onOpenProduct={openProductById} onOpenOrder={(id) => openOrder(id, "messages")}
+        />
       )}
 
       {page==="admin-shops" && currentUser.role==="admin" && (
@@ -737,7 +763,7 @@ export default function App() {
           products={products} savedItems={savedItems} toggleSave={toggleSave} openProduct={openProduct}
           fmtBasic={fmtBasic} fmtAmt={fmtAmt} cartLines={cart?.items?.length || 0}
           orders={orders} openOrder={openOrder} navigate={navigate} logout={logout} shopSetupNeeded={shopSetupNeeded} shopLive={shopLive}
-          onApiError={handleApiError}
+          onApiError={handleApiError} unreadMessages={notifications.unreadMessages}
           onUpdated={(user) => { updateCurrentUser(user); if (currentUser.role === "artisan") refreshProducts(); }}
         />
       )}

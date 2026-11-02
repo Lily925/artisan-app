@@ -1,5 +1,5 @@
 import { COLORS, FONT_SERIF } from "../theme";
-import { CartIcon, HeartIcon } from "./NavIcons";
+import { CartIcon, ChatIcon, HeartIcon } from "./NavIcons";
 import CountBadge from "./CountBadge";
 import NotificationBell from "./NotificationBell";
 
@@ -8,13 +8,13 @@ const LOCALES = [["en", "$"], ["mn", "₮"], ["ko", "₩"]];
 export default function Nav({
   lang, setLang, searchQuery, setSearchQuery, onSearchSubmit,
   cartCount, wishlistCount, currentUser, navigate, t,
-  notifications, fmtAmt, onOpenLink,
+  notifications, fmtAmt, onOpenLink, compact = false,
 }) {
   const nav = t.nav;
 
   return (
     <header style={{ position:"sticky", top:0, zIndex:200, background:COLORS.card, borderBottom:`1px solid ${COLORS.border}` }}>
-      <div className="a-container a-nav-row">
+      <div className={`a-container a-nav-row${compact ? " compact" : ""}`}>
         <a
           href="/"
           className="a-nav-brand"
@@ -47,6 +47,14 @@ export default function Nav({
 
         <div className="a-nav-group a-nav-icons" style={{ gap:0 }}>
           {notifications && <NotificationBell t={t} notifications={notifications} fmtAmt={fmtAmt} onOpenLink={onOpenLink} />}
+
+          {/* Admins take no part in chats. */}
+          {notifications && currentUser?.role !== "admin" && (
+            <button type="button" className="a-icon-btn a-nav-icon" aria-label={nav.messagesAria(notifications.unreadMessages)} onClick={() => navigate("messages")}>
+              <ChatIcon />
+              <CountBadge count={notifications.unreadMessages} />
+            </button>
+          )}
 
           <button type="button" className="a-icon-btn a-nav-icon" aria-label={nav.wishlistAria(wishlistCount)} onClick={() => navigate("saved")}>
             <HeartIcon />

@@ -54,4 +54,10 @@ const checkoutCapture = rateLimit({ windowMs: 10 * MIN, max: 20, key: (req) => r
 const notificationReads = rateLimit({ windowMs: MIN, max: 120, key: (req) => req.user && `user:${req.user.id}` });
 const notificationWrites = rateLimit({ windowMs: MIN, max: 60, key: (req) => req.user && `user:${req.user.id}` });
 
-module.exports = { rateLimit, loginByIp, loginByAccount, signupByIp, passwordChange, checkoutCreate, checkoutCapture, notificationReads, notificationWrites };
+// Chat, per user: about 20 messages a minute. Reading polls every 15-45 seconds per tab.
+const chatSends = rateLimit({ windowMs: MIN, max: 20, key: (req) => req.user && `user:${req.user.id}`,
+  message: "You're sending messages too quickly. Please wait a moment." });
+const chatStarts = rateLimit({ windowMs: MIN, max: 60, key: (req) => req.user && `user:${req.user.id}` });
+const chatReads = rateLimit({ windowMs: MIN, max: 120, key: (req) => req.user && `user:${req.user.id}` });
+
+module.exports = { rateLimit, loginByIp, loginByAccount, signupByIp, passwordChange, checkoutCreate, checkoutCapture, notificationReads, notificationWrites, chatSends, chatStarts, chatReads };

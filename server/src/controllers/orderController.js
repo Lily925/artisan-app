@@ -297,4 +297,4 @@ async function setItemVideo(req, res) {
   res.json(await orderDetail({ ...access, order: updated }));
 }
 
-module.exports = { createOrder, listOrders, getOrder, listShopOrders, advanceOrder, setItemVideo, buildOrderFromCart };
+module.exports = { createOrder, listOrders, getOrder, listShopOrders, advanceOrder, setItemVideo, buildOrderFromCart, orderArtisanId };

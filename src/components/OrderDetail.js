@@ -182,7 +182,7 @@ function Payouts({ o, payout, fmtAmt, forArtisan }) {
   );
 }
 
-export default function OrderDetail({ t, lang, orderId, fmtAmt, onBack, onApiError, showToast, onChanged }) {
+export default function OrderDetail({ t, lang, orderId, fmtAmt, onBack, onApiError, showToast, onChanged, onMessage }) {
   const o = t.orders;
   const [order, setOrder] = useState(null);
   const [failed, setFailed] = useState(false);
@@ -242,6 +242,12 @@ export default function OrderDetail({ t, lang, orderId, fmtAmt, onBack, onApiErr
           ? <>{o.paidWith(fmtDate(order.payment.capturedAt))}{order.payment.reference && <> · {o.reference}: {order.payment.reference}</>}</>
           : o.notPaid}
       </p>
+      {/* Not for an artisan's order from their own shop: there is nobody else to message. */}
+      {onMessage && order.shop && viewer.isBuyer !== viewer.isArtisan && (
+        <button type="button" className="a-btn-outline" style={{ padding:"9px 18px", fontSize:13, minHeight:44, marginBottom:20 }} onClick={onMessage}>
+          {viewer.isBuyer ? t.messages.messageArtisan : t.messages.messageBuyer}
+        </button>
+      )}
 
       {/* >= 1024px: status + items left, shipping + payout right (when there is any). */}
       <div className={`a-order-layout${hasAside ? " has-aside" : ""}`}>

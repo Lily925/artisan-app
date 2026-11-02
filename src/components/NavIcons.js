@@ -24,3 +24,9 @@ export const BellIcon = () => (
     <path d="M10 21a2.2 2.2 0 0 0 4 0" />
   </LineIcon>
 );
+
+export const ChatIcon = () => (
+  <LineIcon>
+    <path d="M20.5 11.5c0 4.1-3.8 7.4-8.5 7.4-1.1 0-2.2-.2-3.2-.5L4 20l1.3-3.8c-1.1-1.3-1.8-2.9-1.8-4.7C3.5 7.4 7.3 4 12 4s8.5 3.4 8.5 7.5Z" />
+  </LineIcon>
+);

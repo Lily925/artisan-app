@@ -3,8 +3,8 @@ import { useEffect, useRef } from "react";
 const isHidden = () => document.visibilityState === "hidden";
 
 // Runs fn right away and then every `ms` while the tab is visible. Paused while the tab is
-// hidden; runs again as soon as it comes back.
-export function useVisiblePolling(fn, ms, enabled = true) {
+// hidden; runs again as soon as it comes back. A new resetKey (e.g. another chat) starts over.
+export function useVisiblePolling(fn, ms, enabled = true, resetKey = null) {
   const latest = useRef(fn);
   useEffect(() => { latest.current = fn; });
 
@@ -22,5 +22,5 @@ export function useVisiblePolling(fn, ms, enabled = true) {
     if (!isHidden()) { tick(); start(); }
     document.addEventListener("visibilitychange", onVisibility);
     return () => { stop(); document.removeEventListener("visibilitychange", onVisibility); };
-  }, [ms, enabled]);
+  }, [ms, enabled, resetKey]);
 }

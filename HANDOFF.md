@@ -157,10 +157,12 @@ The 8 seeded placeholder products (emoji instead of a photo) of the demo artisan
 4. The payment shows in the sandbox business account. Sandbox orders that are never approved expire on their own.
 5. Payouts: put a sandbox **Personal** account email in the artisan's shop profile (payout email) and move the order through In production / Shipped, then confirm receipt as the buyer. Each step sends one payout from the sandbox business account; the order page shows them as Sent to PayPal, then Paid out once PayPal reports SUCCESS. A made-up email gives UNCLAIMED (returned after 30 days).
 
-## Notifications (2026-11-02)
+## Notifications and shop chat (2026-11-02)
 
-- **Notifications:** `models/Notification` stores a type, a few params and an in-app link, never translated text; the frontend builds the MN/EN/KO message (`t.notifications.text`, `notificationHelpers.js`). All are created through `utils/notify.js`, which never throws and drops any param a type doesn't allow. `GET /api/notifications` (latest 30, `unreadCount`), `POST /api/notifications/read-all`, `POST /api/notifications/:id/read`. The header polls every 45 seconds while the tab is visible and after each action (`useNotifications.js`, `usePolling.js`, `USER_ACTED_EVENT` in `api.js`).
-- **Limits** (per user, per minute): 120 notification reads, 60 notification writes. In memory, like the other limits.
+- **Notifications:** `models/Notification` stores a type, a few params and an in-app link, never translated text; the frontend builds the MN/EN/KO message (`t.notifications.text`, `notificationHelpers.js`). All are created through `utils/notify.js`, which never throws and drops any param a type doesn't allow. `GET /api/notifications` (latest 30, `unreadCount`, `unreadMessages`), `POST /api/notifications/read-all`, `POST /api/notifications/:id/read`. The header polls every 45 seconds while the tab is visible and after each action (`useNotifications.js`, `usePolling.js`, `USER_ACTED_EVENT` in `api.js`).
+- **Chat:** `models/Conversation` (one per buyer + shop) and `models/Message`. `POST /api/conversations` `{ shopId | productId | orderId }`, `GET /api/conversations`, `GET /api/conversations/:id/messages?before=`, `POST /api/conversations/:id/messages`, `POST /api/conversations/:id/read`. Anyone but the buyer and the shop's owner gets 404, admins included. Saved replies and the greeting: `GET/PUT /api/artisans/me/chat-settings` (`select: false` on the shop, so never public). Page: `Messages.js`; settings: `ChatSettingsForm.js` in shop settings.
+- **Decisions:** buyers start conversations; the one exception is the artisan of an order opening the chat with that order's buyer. A conversation isn't listed until someone writes a real message, so opening a chat and leaving doesn't reach the shop; the greeting is sent when the buyer opens a new chat, counts as read and makes no notification. Several messages in one chat share one unread notification (`notifyNewMessage`, with a count); reading the chat clears it. The message text is never in a notification. A new product or order replaces the earlier pinned card. A suspended shop's chats stay readable, but neither side can send.
+- **Limits** (per user, per minute): 20 messages, 60 conversation starts, 120 chat reads, 120 notification reads, 60 notification writes. In memory, like the other limits.
 
 ## Security (review of 2026-10-12)
 
@@ -187,7 +189,7 @@ The 8 seeded placeholder products (emoji instead of a photo) of the demo artisan
 
 ## Pending / deferred
 
-- **Features:** email verification (not started); PayPal refunds and webhooks (payout status is only refreshed when an order page is opened); an admin view for failed/returned payouts; shipping address and cancel flow for orders; commission follow-through after a bid is accepted (status changes, artisan-side view of won jobs).
+- **Features:** email verification (not started); PayPal refunds and webhooks (payout status is only refreshed when an order page is opened); an admin view for failed/returned payouts; shipping address and cancel flow for orders; commission follow-through after a bid is accepted (status changes, artisan-side view of won jobs); images in chat messages.
 - **Deployment:** Cloudinary credentials on the host, real credentials (don't ship `artisan123`; the `@example.com` email is a placeholder), `REACT_APP_API_URL`, tighter CORS (it currently allows any site).
 - **Deferred by the owner:** comments (needs moderation/spam handling/UI design); product descriptions in Mongolian and Korean (English only for now).
 - **Waiting on the owner:** a cleaner purple necklace photo (the current one shows Instagram's arrow and dots); optionally a higher-resolution logo (the current one is 189 px).

@@ -74,7 +74,7 @@ function ProductTile({ product, name, price, tiers, tierName, liked, likeLabel, 
 // Public portfolio page of one artisan (shop + personal profile in one): header, all
 // products (filter/sort when there are many), about, how it works, closing call to action. Only public data: no email, phone, address or contact note.
 // `products` must already exclude hidden ones. `focus="about"` scrolls to the About section.
-export default function Portfolio({ lang, t, artisan, products, savedItems, toggleSave, openProduct, fmtBasic, navigate, onBack, focus }) {
+export default function Portfolio({ lang, t, artisan, products, savedItems, toggleSave, openProduct, fmtBasic, navigate, onBack, focus, onMessageShop }) {
   const pf = t.portfolio;
   const { ownerName, shopName, displayName, instagramHandle, instagramUrl, photoUrl, avatarUrl, personalBio, yearsExperience, location } = artisanInfo(artisan);
   const [category, setCategory] = useState("");
@@ -144,7 +144,8 @@ export default function Portfolio({ lang, t, artisan, products, savedItems, togg
               </p>
             )}
             <div className="pf-row">
-              {igButton(pf.instagram, true)}
+              {onMessageShop && <button type="button" className="a-btn-primary" onClick={onMessageShop}>{t.messages.messageShop}</button>}
+              {igButton(pf.instagram, !onMessageShop)}
               <span className="pf-stat">{pf.statProducts(products.length)}</span>
               <span className="pf-stat">♡ {pf.statLikes(likes)}</span>
             </div>

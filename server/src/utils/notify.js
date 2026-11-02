@@ -19,6 +19,8 @@ const PARAMS_BY_TYPE = {
   shop_suspended: ["shopId"],
   // Admin
   shop_pending: ["shopId", "shopName"],
+  // Either side of a chat (the message text is never included)
+  new_message: ["conversationId", "name", "count"],
 };
 const MAX_TEXT = 300;
 
@@ -56,4 +58,22 @@ const notifyAdminsOfNewShop = (shop) => notify(
   "/admin/shops",
 );
 
-module.exports = { notify, notifyAdminsOfNewShop };
+// A chat message arrived. One unread notification per conversation, however many messages:
+// a further message moves it back to the top and bumps its count. Never throws.
+async function notifyNewMessage(recipient, conversationId, senderName) {
+  try {
+    const id = String(conversationId);
+    await Notification.updateOne(
+      { user: recipient, type: "new_message", "params.conversationId": id, readAt: null },
+      {
+        $set: { createdAt: new Date(), link: `/messages/${id}`, "params.name": String(senderName || "").slice(0, MAX_TEXT) },
+        $inc: { "params.count": 1 },
+      },
+      { upsert: true },
+    );
+  } catch (err) {
+    console.error(`Notification "new_message" failed: ${err.message}`);
+  }
+}
+
+module.exports = { notify, notifyAdminsOfNewShop, notifyNewMessage };

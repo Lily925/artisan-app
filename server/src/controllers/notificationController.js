@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const Notification = require("../models/Notification");
+const { unreadMessagesFor } = require("./conversationController");
 
 const LATEST = 30;
 
@@ -9,11 +10,12 @@ const unreadCount = (user) => Notification.countDocuments({ user, readAt: null }
 // Every query below is limited to the caller (req.user comes from the token).
 // GET /api/notifications: the latest 30, and how many are unread in total.
 async function listNotifications(req, res) {
-  const [items, unread] = await Promise.all([
+  const [items, unread, unreadMessages] = await Promise.all([
     Notification.find({ user: req.user.id }).sort({ createdAt: -1, _id: -1 }).limit(LATEST).lean(),
     unreadCount(req.user.id),
+    req.user.role === "admin" ? 0 : unreadMessagesFor(req.user.id), // the Messages badge, in the same poll
   ]);
-  res.json({ items: items.map(view), unreadCount: unread });
+  res.json({ items: items.map(view), unreadCount: unread, unreadMessages });
 }
 
 // POST /api/notifications/read-all

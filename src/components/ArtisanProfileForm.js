@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { COLORS, FONT_SERIF, FONT_SANS } from "../theme";
 import { api } from "../api";
+import ChatSettingsForm from "./ChatSettingsForm";
 
 // Form state is all strings; yearsExperience is converted back to a number (or null) on save.
 const toForm = (a) => ({
@@ -14,7 +15,7 @@ const toForm = (a) => ({
 
 // Lets a logged-in artisan edit the self-service parts of their own shop profile.
 // The API only ever touches the caller's own record (PUT /api/artisans/me).
-export default function ArtisanProfileForm({ t, navigate, onSaved, onApiError, canAddProducts = false }) {
+export default function ArtisanProfileForm({ t, navigate, onSaved, onApiError, canAddProducts = false, showToast }) {
   const s = t.shopSettings;
   const [artisan, setArtisan] = useState(null);
   const [form, setForm] = useState(toForm({}));
@@ -146,6 +147,8 @@ export default function ArtisanProfileForm({ t, navigate, onSaved, onApiError, c
                 {saving ? s.saving : s.save}
               </button>
             </form>
+
+            <ChatSettingsForm t={t} onApiError={onApiError} showToast={showToast} />
           </>
         )}
       </div>
