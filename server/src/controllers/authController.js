@@ -3,6 +3,7 @@ const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const { SHOP_NAME, SHOP_DESCRIPTION_MAX, shopNameTaken, createShop } = require("../utils/shops");
 const { SEED_PASSWORD } = require("../config/constants");
+const { notifyAdminsOfNewShop } = require("../utils/notify");
 
 function signToken(user) {
   return jwt.sign(
@@ -78,6 +79,7 @@ async function signup(req, res) {
       await User.deleteOne({ _id: user._id }); // no artisan account without its shop
       throw err;
     }
+    await notifyAdminsOfNewShop(shop);
   }
 
   const token = signToken(user);

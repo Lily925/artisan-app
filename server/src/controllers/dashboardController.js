@@ -1,4 +1,5 @@
 const Artisan = require("../models/Artisan");
+const { ignoreSelfLikes } = require("../utils/selfLikes");
 const Product = require("../models/Product");
 const Order = require("../models/Order");
 const User = require("../models/User");
@@ -24,8 +25,9 @@ async function getMyDashboard(req, res) {
   if (!artisan) return res.status(404).json({ error: "No artisan profile is linked to this account" });
 
   const products = await Product.find({ artisan: artisan._id })
-    .select("title titleEn category images likeCount viewCount createdAt")
+    .select("title titleEn category images likeCount viewCount createdAt artisan")
     .sort({ createdAt: -1 });
+  await ignoreSelfLikes(products);
   const productIds = products.map((p) => p._id);
   const ownProduct = new Set(productIds.map(String));
 

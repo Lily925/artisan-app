@@ -1,14 +1,11 @@
 // API tests for product photos (up to 5 per product).
-// Run with the API running (npm run dev / npm start):  npm run test:photos
-// Uses 2 sign-ups (the limit is 10 per hour per address; restarting the API resets it) and
-// briefly puts one item in buyer@artisan.mn's cart (removed again). Everything it creates
-// (photo-test-* accounts, their shops/products/photos, a test order) is deleted at the end,
-// also when a check fails.
+// Starts its own throwaway database and API (setup.mjs):  npm run test:photos
+// Everything it creates (photo-test-* accounts, shops, products, photos, an order) is deleted
+// at the end, also when a check fails.
+import { API, STORAGE, PNG, JPG, WEBP, EXE, BIG_PNG, storedUrl, exists, served, count, connectDB, stopTestEnv } from "./helpers.mjs";
 import { createRequire } from "module";
 import crypto from "crypto";
-import { API, STORAGE, PNG, JPG, WEBP, EXE, BIG_PNG, storedUrl, exists, served, count } from "./helpers.mjs";
 const require = createRequire(import.meta.url);
-require("dotenv").config();
 
 let pass = 0, fail = 0;
 const check = (n, ok, x = "") => { ok ? pass++ : fail++; console.log(`${ok ? "PASS" : "FAIL"}  ${n}${x ? "  — " + x : ""}`); };
@@ -33,17 +30,26 @@ const tag = crypto.randomBytes(4).toString("hex");
 const pw = crypto.randomBytes(12).toString("hex");
 const created = { productIds: [], orderIds: [], files: [] };
 
-async function makeArtisan(k) {
-  const s = await call("/auth/signup", { method: "POST", json: { name: `Photo Test ${k}`, email: `photo-test-${k}-${tag}@test.invalid`, password: pw, role: "artisan" } });
+const email = (k) => `photo-test-${k}-${tag}@test.invalid`;
+// An account created directly in the database, logged in through the API.
+async function makeAccount(k, role) {
+  const User = require("../src/models/User");
+  const bcrypt = require("bcryptjs");
+  const user = await User.create({ name: `Photo Test ${k}`, email: email(k), passwordHash: await bcrypt.hash(pw, 10), role });
+  const { token } = (await call("/auth/login", { method: "POST", json: { email: email(k), password: pw } })).body;
+  return { user, token };
+}
+// An artisan signed up with a shop (shop name is required), approved by the admin.
+async function makeArtisan(k, adminToken) {
+  const s = await call("/auth/signup", { method: "POST", json: { name: `Photo Test ${k}`, email: email(k), password: pw, role: "artisan", shopName: `Photo Test ${k} ${tag}` } });
   if (s.status !== 201) throw new Error(`sign-up failed: ${s.status} ${s.body.error}`);
-  const setup = await call("/artisans/me", { method: "POST", token: s.body.token, json: { shopName: `Photo Test ${k} ${tag}` } });
-  if (setup.status !== 201) throw new Error(`shop setup failed: ${setup.status} ${setup.body.error}`);
+  const approved = await call(`/admin/shops/${s.body.shop.id}/approve`, { method: "PUT", token: adminToken });
+  if (approved.status !== 200) throw new Error(`approval failed: ${approved.status} ${approved.body.error}`);
   return s.body.token;
 }
 
 async function cleanup() {
   const mongoose = require("mongoose");
-  const connectDB = require("../src/config/db");
   const User = require("../src/models/User"), Artisan = require("../src/models/Artisan"), Product = require("../src/models/Product");
   const Order = require("../src/models/Order"), Cart = require("../src/models/Cart");
   const { deleteProductPhoto } = require("../src/utils/imageStorage");
@@ -56,6 +62,8 @@ async function cleanup() {
   await Promise.all(created.files.map(deleteProductPhoto)); // kept only for the deleted test order
   await Cart.updateMany({ "items.product": { $in: products.map((p) => p._id) } }, { $pull: { items: { product: { $in: products.map((p) => p._id) } } } });
   await Product.deleteMany({ _id: { $in: products.map((p) => p._id) } });
+  // Admins are told about each new shop: remove those notifications with the test shops.
+  await require("../src/models/Notification").deleteMany({ "params.shopId": { $in: artisans.map((a) => String(a._id)) } });
   await Artisan.deleteMany({ _id: { $in: artisans.map((a) => a._id) } });
   await Cart.deleteMany({ user: { $in: users.map((u) => u._id) } });
   const { deletedCount } = await User.deleteMany({ _id: { $in: users.map((u) => u._id) } });
@@ -64,11 +72,11 @@ async function cleanup() {
 }
 
 try {
-  const owner = await makeArtisan("owner");
-  const other = await makeArtisan("other");
-  const login = async (email) => (await call("/auth/login", { method: "POST", json: { email, password: "artisan123" } })).body.token;
-  const admin = await login("admin@artisan.mn");
-  const buyer = await login("buyer@artisan.mn");
+  await connectDB();
+  const { token: admin } = await makeAccount("admin", "admin");
+  const { token: buyer, user: buyerUser } = await makeAccount("buyer", "buyer");
+  const owner = await makeArtisan("owner", admin);
+  const other = await makeArtisan("other", admin);
   const filesBefore = await uploadCount();
 
   // ── create ──
@@ -134,11 +142,9 @@ try {
 
   // ── orders keep the cover as it was at purchase ──
   const mongoose = require("mongoose");
-  const connectDB = require("../src/config/db");
   const Order = require("../src/models/Order"), User = require("../src/models/User"), Product = require("../src/models/Product");
   const { buildOrderFromCart } = require("../src/controllers/orderController");
   await connectDB();
-  const buyerUser = await User.findOne({ email: "buyer@artisan.mn" }).select("_id");
   const cartBefore = (await call("/cart", { token: buyer })).body.items.length;
   await call("/cart", { method: "POST", token: buyer, json: { productId: p._id, tier: "basic", qty: 1 } });
   const built = await buildOrderFromCart(buyerUser._id);
@@ -158,9 +164,10 @@ try {
   check("order page still shows the purchase-time cover", detail.status === 200 && detail.body.items?.[0]?.image === oldCover, detail.body.items?.[0]?.image);
 
   // ── old products keep working ──
-  const pub = (await call("/products")).body;
-  const seeded = pub.find((x) => x.titleEn === "Silver Necklace");
-  check("existing single-photo products still list with 1 photo", seeded?.images?.length === 1);
+  r = await call("/products", { method: "POST", token: owner, form: productForm([[PNG(), "image/png", "1.png"]], { titleEn: "TEST one photo" }) });
+  created.productIds.push(r.body._id);
+  const single = (await call("/products")).body.find((x) => x.titleEn === "TEST one photo");
+  check("single-photo products list with 1 photo", single?.images?.length === 1);
   const legacy = await mongoose.connection.db.collection("products").insertOne({
     title: "TEST legacy", titleEn: "TEST legacy image", category: "crafts", artisan: (await Product.findById(p._id)).artisan,
     pricingTiers: { basic: { price: 5, label: "" }, story: { price: 6.5, label: "" }, patron: { price: 8.25, label: "" } },
@@ -175,12 +182,12 @@ try {
   r = await call(`/products/${p._id}`, { method: "DELETE", token: owner });
   check("owner deletes the product (200)", r.status === 200);
   check("its photos are deleted (except the one an order uses)", (await noneExist(lastImages)) && (await exists(oldCover)));
-  await mongoose.disconnect();
 } catch (err) {
   fail++;
   console.log("FAIL  test run stopped:", err.message);
 } finally {
   await cleanup();
 }
+await stopTestEnv();
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exitCode = fail ? 1 : 0;

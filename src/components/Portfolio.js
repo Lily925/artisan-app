@@ -6,6 +6,7 @@ import ArtisanAvatar from "./ArtisanAvatar";
 import InstagramIcon from "./InstagramIcon";
 import Footer from "./Footer";
 import ProductImage from "./ProductImage";
+import MessageShopButton, { messageShopMode } from "./MessageShopButton";
 
 // Filter + sort only pay off once there's a real list to look through.
 const FILTER_SORT_MIN = 7;
@@ -41,7 +42,7 @@ const CSS = `
 `;
 
 // The first row is visible right away, so it loads eagerly; the rest lazily.
-function ProductTile({ product, name, price, tiers, tierName, liked, likeLabel, onToggleSave, onOpen, eager }) {
+function ProductTile({ product, name, price, tiers, tierName, liked, likeLabel, onToggleSave, onOpen, eager, canLike }) {
   const likeCount = product.likeCount || 0;
   return (
     <article className="pf-card">
@@ -51,11 +52,11 @@ function ProductTile({ product, name, price, tiers, tierName, liked, likeLabel, 
             <ProductImage src={product.images?.[0]} alt={name} eager={eager} />
           </span>
         </button>
-        <button type="button" className="a-wishlist-btn" aria-label={`${likeLabel} (${likeCount})`} aria-pressed={liked}
+        {canLike && <button type="button" className="a-wishlist-btn" aria-label={`${likeLabel} (${likeCount})`} aria-pressed={liked}
           onClick={(e) => { e.stopPropagation(); onToggleSave(product.id, e); }}>
           <span aria-hidden="true">{liked ? "❤️" : "🤍"}</span>
           {likeCount > 0 && <span aria-hidden="true" className="a-like-count">{likeCount}</span>}
-        </button>
+        </button>}
       </div>
       <button type="button" className="pf-card-open" onClick={() => onOpen(product)} tabIndex={-1} aria-hidden="true"
         style={{ padding:"16px 16px 18px", display:"flex", flexDirection:"column", gap:10, flex:1 }}>
@@ -74,8 +75,9 @@ function ProductTile({ product, name, price, tiers, tierName, liked, likeLabel, 
 // Public portfolio page of one artisan (shop + personal profile in one): header, all
 // products (filter/sort when there are many), about, how it works, closing call to action. Only public data: no email, phone, address or contact note.
 // `products` must already exclude hidden ones. `focus="about"` scrolls to the About section.
-export default function Portfolio({ lang, t, artisan, products, savedItems, toggleSave, openProduct, fmtBasic, navigate, onBack, focus }) {
+export default function Portfolio({ lang, t, artisan, products, savedItems, toggleSave, openProduct, fmtBasic, navigate, onBack, focus, viewer = null, onMessageShop, onSignIn }) {
   const pf = t.portfolio;
+  const isOwner = Boolean(viewer) && String(artisan.user?._id) === String(viewer.id);
   const { ownerName, shopName, displayName, instagramHandle, instagramUrl, photoUrl, avatarUrl, personalBio, yearsExperience, location } = artisanInfo(artisan);
   const [category, setCategory] = useState("");
   const [sort, setSort] = useState("newest");
@@ -144,7 +146,8 @@ export default function Portfolio({ lang, t, artisan, products, savedItems, togg
               </p>
             )}
             <div className="pf-row">
-              {igButton(pf.instagram, true)}
+              <MessageShopButton t={t} viewer={viewer} isOwner={isOwner} onMessage={onMessageShop} onSignIn={onSignIn} />
+              {igButton(pf.instagram, !messageShopMode(viewer, isOwner))}
               <span className="pf-stat">{pf.statProducts(products.length)}</span>
               <span className="pf-stat">♡ {pf.statLikes(likes)}</span>
             </div>
@@ -200,7 +203,7 @@ export default function Portfolio({ lang, t, artisan, products, savedItems, togg
                   return (
                     <ProductTile key={p.id} product={p} name={nameOf(p)} price={fmtBasic(p)} tiers={offeredTiers(p)} tierName={t.orders.tierName}
                       liked={liked} likeLabel={liked ? t.homePage.wishlistRemove : t.homePage.wishlistAdd}
-                      onToggleSave={toggleSave} onOpen={openProduct} eager={i < 4} />
+                      onToggleSave={toggleSave} onOpen={openProduct} eager={i < 4} canLike={!isOwner} />
                   );
                 })}
               </div>

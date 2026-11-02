@@ -1,23 +1,21 @@
 // API tests for artisan sign-up with a shop, shop approval and the admin shop endpoints.
-// Run with the API running (npm run dev / npm start):  npm run test:shops (also part of test:api)
-// Uses 2 sign-ups (with register.test.mjs, 10 of the 10 per hour per address; restarting the
-// API resets the counter). Uploads 1 product photo, deleted again with the product.
+// Starts its own throwaway database and API (setup.mjs):  npm run test:shops (also part of test:api)
+// Uploads 1 product photo, deleted again with the product.
 // The admin, buyer and an older-style shop (no status) are created directly in the database;
 // everything (shop-test-*@test.invalid) is deleted at the end, also when a check fails.
+import { API, connectDB, stopTestEnv } from "./setup.mjs";
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
-require("dotenv").config();
 import crypto from "crypto";
 import { PNG } from "./helpers.mjs";
 const bcrypt = require("bcryptjs");
 const mongoose = require("mongoose");
-const connectDB = require("../src/config/db");
 const User = require("../src/models/User");
 const Artisan = require("../src/models/Artisan");
 const Product = require("../src/models/Product");
 const Cart = require("../src/models/Cart");
+const Notification = require("../src/models/Notification");
 
-const API = process.env.API_URL || `http://localhost:${process.env.PORT || 5000}/api`;
 let pass = 0, fail = 0;
 const check = (n, ok, x = "") => { ok ? pass++ : fail++; console.log(`${ok ? "PASS" : "FAIL"}  ${n}${x ? "  — " + x : ""}`); };
 const call = async (path, { method = "GET", token, json, form } = {}) => {
@@ -116,6 +114,15 @@ try {
   check("approved artisan can publish a product → 201", r.status === 201, `${r.status} ${r.body.error || ""}`);
   created.productId = r.body._id;
   check("product is public", ids((await call("/products")).body).includes(created.productId));
+  const privateData = /@|passwordHash|payoutEmail|statusReason|reviewedBy|likedBy|viewCount|savedReplies|chatGreeting/;
+  r = await call("/products");
+  check("visitors can read the product list, with no private data", r.status === 200 && !privateData.test(r.text));
+  r = await call(`/products/${created.productId}`);
+  check("visitors can read a product page, with no private data", r.status === 200 && !privateData.test(r.text), r.text.slice(0, 80));
+  r = await call("/artisans");
+  check("visitors can read the shop list, with no private data", r.status === 200 && !privateData.test(r.text));
+  check("a visitor's product view is accepted", (await call(`/products/${created.productId}/view`, { method: "POST" })).status < 500);
+  check("account data still needs a login", (await call("/cart")).status === 401 && (await call("/orders")).status === 401 && (await call("/notifications")).status === 401 && (await call("/conversations")).status === 401);
   check("buyer can add it to the cart", (await call("/cart", { method: "POST", token: buyerToken, json: { productId: created.productId, tier: "basic" } })).status === 201);
   await call("/cart", { method: "DELETE", token: buyerToken, json: { productId: created.productId, tier: "basic" } });
 
@@ -152,11 +159,6 @@ try {
   check("…and listed as approved for the admin", r.body.find?.((s) => s.id === String(legacyShop._id))?.status === "approved");
   check("…and keeps no status until the migration (treated as approved)", (await call("/artisans/me", { token: legacyToken })).body.status === undefined);
 
-  // ── demo data ──
-  const noon = (await call("/auth/login", { method: "POST", json: { email: "noon.handmade@example.com", password: "artisan123" } })).body.token;
-  r = await call("/artisans/me", { token: noon });
-  check("demo shop noon_handmade_ is approved", r.status === 200 && (r.body.status ?? "approved") === "approved", r.body.status);
-  check("demo shop's products are still public", (await call("/products")).body.some((p) => String(p.artisan?._id) === r.body._id));
 } finally {
   if (created.productId) {
     const t = await login("artisan");
@@ -164,6 +166,8 @@ try {
   }
   const users = (await User.find({ email: new RegExp(`^shop-test-.*-${tag}@test\\.invalid$`) }).select("_id")).map((u) => u._id);
   const shops = (await Artisan.find({ user: { $in: users } }).select("_id")).map((a) => a._id);
+  // Admins are told about each new shop, owners about status changes.
+  await Notification.deleteMany({ $or: [{ user: { $in: users } }, { "params.shopId": { $in: shops.map(String) } }] });
   await Product.deleteMany({ artisan: { $in: shops } });
   await Artisan.deleteMany({ _id: { $in: shops } });
   await Cart.deleteMany({ user: { $in: users } });
@@ -171,6 +175,7 @@ try {
   console.log(`cleanup: removed ${deletedCount} test accounts, ${shops.length} shops`);
   await mongoose.disconnect();
 }
+await stopTestEnv();
 console.log(`
 ${pass} passed, ${fail} failed`);
 process.exitCode = fail ? 1 : 0;

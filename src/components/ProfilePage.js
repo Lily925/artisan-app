@@ -4,6 +4,8 @@ import { api } from "../api";
 import ProfileCard from "./ProfileCard";
 import ChangePasswordForm from "./ChangePasswordForm";
 import ProductCard from "./ProductCard";
+import { isOwnProduct } from "../artisanInfo";
+import CountBadge from "./CountBadge";
 
 const RECENT_SHOP_ORDERS = 5;
 
@@ -72,7 +74,7 @@ function OrderRow({ first, title, sub, amount, onOpen }) {
 // Buyers: stats, order history, liked items.
 export default function ProfilePage({
   t, lang, user, emoji, products, savedItems, toggleSave, openProduct, fmtBasic, fmtAmt,
-  cartLines, orders, openOrder, navigate, logout, onUpdated, onApiError, shopSetupNeeded, shopLive = false,
+  cartLines, orders, openOrder, navigate, logout, onUpdated, onApiError, shopSetupNeeded, shopLive = false, unreadMessages = 0, onOpenInbox,
 }) {
   const pp = t.profilePage;
   const o = t.orders;
@@ -116,7 +118,7 @@ export default function ProfilePage({
       )}
       <ProductCard
       product={p} nameMn={p.title} nameEn={p.titleEn} lang={lang}
-      isSaved={savedItems.includes(p.id)} onToggleSave={toggleSave} onOpen={openProduct} price={fmtBasic(p)}
+      isOwn={isOwnProduct(p, user.id)} isSaved={savedItems.includes(p.id)} onToggleSave={toggleSave} onOpen={openProduct} price={fmtBasic(p)}
       certifiedLabel={t.homePage.certified} wishlistAddLabel={t.homePage.wishlistAdd} wishlistRemoveLabel={t.homePage.wishlistRemove}
     />
     </div>
@@ -159,8 +161,14 @@ export default function ProfilePage({
                   <button type="button" className="a-btn-primary" style={actionBtn} onClick={() => navigate("admin-shops")}>🛡 {t.adminShops.open}</button>
                 </div>
               )}
-              <div style={{ marginTop:12 }}>
+              <div style={{ marginTop:12, display:"flex", gap:8, justifyContent:"center", flexWrap:"wrap" }}>
                 <button type="button" className="a-btn-outline" style={actionBtn} onClick={() => navigate("my-commissions")}>{t.commissions.mineOpen}</button>
+                {user.role !== "admin" && (
+                  <button type="button" className="a-btn-outline" style={{ ...actionBtn, position:"relative" }} aria-label={t.nav.messagesAria(unreadMessages)} onClick={onOpenInbox}>
+                    {t.messages.title}
+                    <CountBadge count={unreadMessages} />
+                  </button>
+                )}
               </div>
             </ProfileCard>
             <ChangePasswordForm t={t} onApiError={onApiError} />

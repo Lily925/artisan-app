@@ -7,6 +7,10 @@ const Order = require("../models/Order");
 const { saveProductPhotos, deleteProductPhoto, MAX_PRODUCT_PHOTOS } = require("../utils/imageStorage");
 const { recordProductView } = require("../utils/productViews");
 const { ProductViewMark } = require("../models/ProductView");
+const ProductSaveMark = require("../models/ProductSaveMark");
+const Notification = require("../models/Notification");
+const { notifyProductSaved } = require("../utils/notify");
+const { ignoreSelfLikes } = require("../utils/selfLikes");
 
 const { ARTISAN_USER_PUBLIC } = require("../config/constants");
 const { isShopLive, shopIsLive, notLiveShopIds } = require("../utils/shops");
@@ -31,12 +35,13 @@ async function listProducts(req, res) {
   if (category) filter.category = category;
 
   const products = await Product.find(filter).populate(ARTISAN_POPULATE).sort({ createdAt: -1 });
-  res.json(products);
+  res.json(await ignoreSelfLikes(products));
 }
 
 async function getProduct(req, res) {
   const product = await Product.findOne({ _id: req.params.id, ...(await visibleTo(req.user)) }).populate(ARTISAN_POPULATE);
   if (!product) return res.status(404).json({ error: "Product not found" });
+  await ignoreSelfLikes([product]);
   res.json(product);
 }
 
@@ -215,6 +220,8 @@ async function deleteProduct(req, res) {
   await Cart.updateMany({ "items.product": product._id }, { $pull: { items: { product: product._id } } });
   // Daily view totals stay so the shop's 30-day views chart doesn't change retroactively.
   await ProductViewMark.deleteMany({ product: product._id });
+  await ProductSaveMark.deleteMany({ product: product._id });
+  await Notification.deleteMany({ type: "product_saved", "params.productId": String(product._id) });
   await releaseProductPhotos(product.images);
   res.json({ deleted: true, id: product._id });
 }
@@ -224,8 +231,9 @@ async function deleteProduct(req, res) {
 // requests can't double-count or push likeCount below zero.
 
 async function likeState(productId, userId) {
-  const product = await Product.findById(productId).select("likeCount");
+  const product = await Product.findById(productId).select("likeCount artisan");
   if (!product) return null;
+  await ignoreSelfLikes([product]);
   const liked = Boolean(await Product.exists({ _id: productId, likedBy: userId }));
   return { liked, likeCount: product.likeCount };
 }
@@ -233,10 +241,15 @@ async function likeState(productId, userId) {
 async function likeProduct(req, res) {
   const { id } = req.params;
   if (!mongoose.isValidObjectId(id)) return res.status(404).json({ error: "Product not found" });
-  await Product.updateOne(
+  const product = await Product.findById(id).select("title titleEn artisan");
+  if (product && (await Artisan.exists({ _id: product.artisan, user: req.user.id }))) {
+    return res.status(403).json({ error: "You can't favorite your own product", code: "OWN_PRODUCT" });
+  }
+  const { modifiedCount } = await Product.updateOne(
     { _id: id, likedBy: { $ne: req.user.id }, isHidden: { $ne: true }, artisan: { $nin: await notLiveShopIds() } },
     { $push: { likedBy: req.user.id }, $inc: { likeCount: 1 } }
   );
+  if (modifiedCount === 1) await notifyProductSaved(product, req.user.id);
   const state = await likeState(id, req.user.id);
   if (!state) return res.status(404).json({ error: "Product not found" });
   res.json(state);
@@ -256,7 +269,8 @@ async function unlikeProduct(req, res) {
 
 // ids of the products the current user has liked
 async function listMyLikes(req, res) {
-  const liked = await Product.find({ likedBy: req.user.id }).select("_id");
+  const ownShop = await Artisan.findOne({ user: req.user.id }).select("_id");
+  const liked = await Product.find({ likedBy: req.user.id, ...(ownShop && { artisan: { $ne: ownShop._id } }) }).select("_id");
   res.json(liked.map((p) => p._id));
 }
 

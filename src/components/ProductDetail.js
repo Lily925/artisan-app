@@ -5,11 +5,12 @@ import { artisanInfo } from "../artisanInfo";
 import InstagramIcon from "./InstagramIcon";
 import ArtisanAvatar from "./ArtisanAvatar";
 import ProductGallery from "./ProductGallery";
+import MessageShopButton from "./MessageShopButton";
 import { bonusText, offeredTiers } from "../tiers";
 
 const TIER_DISPLAY = { basic: "Basic", story: "Story", patron: "Patron" };
 
-export default function ProductDetail({ lang, t, selected, savedItems, toggleSave, addToCart, fmtAmt, navigate, openStorefront, openArtisanProfile, currentUserId, canEdit = true, onEdit, onDelete }) {
+export default function ProductDetail({ lang, t, selected, savedItems, toggleSave, addToCart, fmtAmt, navigate, openStorefront, openArtisanProfile, currentUserId, canEdit = true, onEdit, onDelete, viewer = null, onMessageShop, onSignIn }) {
   const [selectedTier, setSelectedTier] = useState("basic");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -148,11 +149,13 @@ export default function ProductDetail({ lang, t, selected, savedItems, toggleSav
               </div>
             </div>
 
+            <MessageShopButton t={t} viewer={viewer} isOwner={isOwner} onMessage={onMessageShop} onSignIn={onSignIn} className="a-btn-outline" style={{ width:"100%", marginBottom:10 }} />
+
             <div style={{ display:"flex", gap:10, marginBottom:20 }}>
               <button type="button" className="a-btn-primary" style={{ flex:1 }} onClick={handleAddToCart}>
                 {d.addToCart(selectedTierPrice)}
               </button>
-              <button
+              {!isOwner && <button
                 type="button"
                 className="a-icon-only-btn"
                 aria-label={`${isSaved ? t.homePage.wishlistRemove : t.homePage.wishlistAdd} (${likeCount})`}
@@ -162,7 +165,7 @@ export default function ProductDetail({ lang, t, selected, savedItems, toggleSav
               >
                 <span aria-hidden="true">{isSaved ? "❤️" : "🤍"}</span>
                 {likeCount > 0 && <span aria-hidden="true" className="a-like-count">{likeCount}</span>}
-              </button>
+              </button>}
             </div>
 
             <div className="a-callout" style={{ marginBottom:24 }}>

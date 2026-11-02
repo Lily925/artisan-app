@@ -2,7 +2,9 @@ const mongoose = require("mongoose");
 const Commission = require("../models/Commission");
 const Artisan = require("../models/Artisan");
 const { ARTISAN_USER_PUBLIC } = require("../config/constants");
-const { isShopLive } = require("../utils/shops");
+const Product = require("../models/Product");
+const { isShopLive, LIVE_SHOP_FILTER } = require("../utils/shops");
+const { notify } = require("../utils/notify");
 
 // Keys match the frontend's productCategories list (same as productController).
 const CATEGORIES = ["jewelry", "ceramics", "art", "textile", "crafts", "leather", "wood"];
@@ -34,6 +36,13 @@ async function createCommission(req, res) {
     timeline: text(req.body.timeline).slice(0, 100),
     referenceImage: text(req.body.referenceImage).slice(0, 200),
   });
+  // Live shops selling in this category (same match as GET /api/artisans?category=), except
+  // the buyer's own shop. No buyer details in the notification.
+  await notify(async () => {
+    const shops = await Product.distinct("artisan", { category, isHidden: { $ne: true } });
+    const owners = await Artisan.find({ _id: { $in: shops }, ...LIVE_SHOP_FILTER }).distinct("user");
+    return owners.filter((owner) => !owner.equals(req.user.id));
+  }, "commission_match", { commissionId: commission._id, category }, "/commission-board");
   res.status(201).json(commission);
 }
 
@@ -101,6 +110,7 @@ async function submitBid(req, res) {
 
   commission.bids.push({ artisan: artisan._id, price, message });
   await commission.save();
+  await notify(commission.buyer, "offer_received", { commissionId: commission._id, shopName: artisan.shopName }, "/my-commissions");
   res.status(201).json({ bid: commission.bids[commission.bids.length - 1], bidCount: commission.bids.length });
 }
 

@@ -4,7 +4,7 @@ import ProductImage from "./ProductImage";
 
 export default function ProductCard({
   product, nameMn, nameEn, lang, isSaved, onToggleSave, onOpen, price,
-  certifiedLabel, wishlistAddLabel, wishlistRemoveLabel,
+  certifiedLabel, wishlistAddLabel, wishlistRemoveLabel, isOwn = false,
 }) {
   const primaryName = lang === "mn" ? nameMn : nameEn;
   const secondaryName = lang === "mn" ? nameEn : nameMn;
@@ -20,7 +20,7 @@ export default function ProductCard({
         <a href="/" className="a-card-link" aria-label={fullTitle} onClick={openCard}>
           <ProductImage src={product.images?.[0]} alt={fullTitle} />
         </a>
-        <button
+        {!isOwn && <button
           type="button"
           className="a-wishlist-btn"
           aria-label={`${isSaved ? wishlistRemoveLabel : wishlistAddLabel} (${likeCount})`}
@@ -29,7 +29,7 @@ export default function ProductCard({
         >
           <span aria-hidden="true">{isSaved ? "❤️" : "🤍"}</span>
           {likeCount > 0 && <span aria-hidden="true" className="a-like-count">{likeCount}</span>}
-        </button>
+        </button>}
         {product.artisan?.certified && <span className="a-badge-certified">✓ {certifiedLabel}</span>}
       </div>
 

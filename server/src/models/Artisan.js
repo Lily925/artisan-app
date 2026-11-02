@@ -56,6 +56,11 @@ const artisanSchema = new mongoose.Schema(
       match: [/^$|^[^\s@]+@[^\s@]+\.[^\s@]+$/, "Enter a valid PayPal email for payouts"],
       select: false,
     },
+
+    // Chat (owner only, see GET/PUT /api/artisans/me/chat-settings). Hidden from every other
+    // query. The greeting goes out once, as the shop, when a buyer starts a conversation.
+    savedReplies: { type: [{ type: String, trim: true, maxlength: 300 }], default: undefined, select: false },
+    chatGreeting: { type: String, default: "", trim: true, maxlength: 300, select: false },
   },
   { timestamps: true }
 );

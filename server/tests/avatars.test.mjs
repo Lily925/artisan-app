@@ -1,13 +1,9 @@
-// API tests for profile photos (PATCH /api/users/:id), against whichever photo storage the
-// API uses (local disk or Cloudinary; see tests/helpers.mjs).
-// Run with the API running (npm run dev / npm start):  npm run test:avatars
-// Uses 1 sign-up (the limit is 10 per hour per address; restarting the API resets it). The
-// account and its photo are deleted at the end, also when a check fails.
+// API tests for profile photos (PATCH /api/users/:id). Starts its own throwaway database and
+// API (setup.mjs):  npm run test:avatars. Its accounts and photos are deleted at the end.
+import { API, STORAGE, PNG, JPG, EXE, BIG_PNG, storedUrl, exists, served, count, connectDB, stopTestEnv } from "./helpers.mjs";
 import { createRequire } from "module";
 import crypto from "crypto";
-import { API, STORAGE, PNG, JPG, EXE, BIG_PNG, storedUrl, exists, served, count } from "./helpers.mjs";
 const require = createRequire(import.meta.url);
-require("dotenv").config();
 
 let pass = 0, fail = 0;
 const check = (n, ok, x = "") => { ok ? pass++ : fail++; console.log(`${ok ? "PASS" : "FAIL"}  ${n}${x ? "  — " + x : ""}`); };
@@ -20,17 +16,17 @@ const photoForm = (buf, type, name) => { const f = new FormData(); f.append("pho
 
 const tag = crypto.randomBytes(4).toString("hex");
 const email = `avatar-test-${tag}@test.invalid`;
+const otherEmail = `avatar-test-other-${tag}@test.invalid`;
 console.log(`Photo storage under test: ${STORAGE}`);
 
 async function cleanup() {
   const mongoose = require("mongoose");
-  const connectDB = require("../src/config/db");
   const User = require("../src/models/User");
   const { deleteAvatarPhoto } = require("../src/utils/imageStorage");
   await connectDB();
-  const users = await User.find({ email });
-  for (const u of users) await deleteAvatarPhoto(u.avatarUrl);
-  const { deletedCount } = await User.deleteMany({ email });
+  const users = await User.find({ email: { $in: [email, otherEmail] } });
+  for (const u of users) if (u.avatarUrl) await deleteAvatarPhoto(u.avatarUrl);
+  const { deletedCount } = await User.deleteMany({ email: { $in: [email, otherEmail] } });
   console.log(`cleanup: removed ${deletedCount} test account(s) and their photo`);
   await mongoose.disconnect();
 }
@@ -39,7 +35,7 @@ try {
   const s = await call("/auth/signup", { method: "POST", json: { name: "Avatar Test", email, password: crypto.randomBytes(12).toString("hex") } });
   if (s.status !== 201) throw new Error(`sign-up failed: ${s.status} ${s.body.error}`);
   const { token, user } = s.body;
-  const buyer = (await call("/auth/login", { method: "POST", json: { email: "buyer@artisan.mn", password: "artisan123" } })).body.token;
+  const buyer = (await call("/auth/signup", { method: "POST", json: { name: "Avatar Other", email: otherEmail, password: crypto.randomBytes(12).toString("hex") } })).body.token;
   const before = await count("avatars");
 
   // ── upload ──
@@ -82,5 +78,6 @@ try {
 } finally {
   await cleanup();
 }
+await stopTestEnv();
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exitCode = fail ? 1 : 0;

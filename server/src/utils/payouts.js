@@ -15,6 +15,7 @@ const Order = require("../models/Order");
 const Artisan = require("../models/Artisan");
 const Product = require("../models/Product");
 const paypal = require("./paypal");
+const { notify } = require("./notify");
 
 const SPLITS = [["in_production", 30], ["shipped", 30], ["completed", 40]];
 const STEP = { pending: 0, paid: 0, in_production: 1, shipped: 2, completed: 3 };
@@ -106,6 +107,9 @@ async function sendRelease(orderId, milestone) {
       status: "sent", payoutBatchId: result.batch_header?.payout_batch_id,
       payoutItemStatus: result.batch_header?.batch_status || "PENDING", sentAt: new Date(),
     });
+    // Once per release: only the claim above reaches this point, and a release PayPal has
+    // accepted is never sent again. (The PayPal email is never part of the notification.)
+    await notify(artisan.user, "payout_released", { orderId, amount: claimed.amount, percent: claimed.percent, milestone }, `/orders/${orderId}`);
   } catch (err) {
     if (err instanceof paypal.PayPalError && /DUPLICATE|ALREADY/i.test(err.issue || "")) {
       // PayPal already has this batch: it was sent before, never send it again. Needs a manual look-up.
@@ -180,4 +184,4 @@ function summarize(releases) {
   };
 }
 
-module.exports = { buildReleases, ensureReleases, processOrderReleases, refreshSentReleases, sendPendingForArtisan, summarize, isPaidOrder };
+module.exports = { buildReleases, ensureReleases, processOrderReleases, refreshSentReleases, sendPendingForArtisan, summarize, isPaidOrder, artisanIdFor };
