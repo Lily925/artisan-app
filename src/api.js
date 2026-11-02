@@ -40,6 +40,11 @@ function viewerSession() {
   }
 }
 
+// Fired after a signed-in change succeeds, so the unread counts refresh right away (see
+// useNotifications). Not for requests that can't produce a notification for this user.
+export const USER_ACTED_EVENT = "artisan:user-acted";
+const NOT_AN_ACTION = /^\/notifications|^\/cart|\/view$|\/like$/;
+
 async function request(path, { method = "GET", body, formData, auth = false, headers: extraHeaders } = {}) {
   // multipart: let the browser set Content-Type (with the boundary) itself
   const headers = { ...(formData ? {} : { "Content-Type": "application/json" }), ...extraHeaders };
@@ -56,6 +61,7 @@ async function request(path, { method = "GET", body, formData, auth = false, hea
 
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new ApiError(data.error || res.statusText, res.status, data.code);
+  if (auth && method !== "GET" && !NOT_AN_ACTION.test(path)) window.dispatchEvent(new Event(USER_ACTED_EVENT));
   return data;
 }
 
@@ -137,6 +143,11 @@ export const api = {
     request(`/commissions/${id}/bids`, { method: "POST", auth: true, body: { price, message } }),
   acceptBid: (id, bidId) =>
     request(`/commissions/${id}/accept-bid`, { method: "PUT", auth: true, body: { bidId } }),
+
+  // Own notifications only: { items (latest 30), unreadCount }.
+  getNotifications: () => request("/notifications", { auth: true }),
+  markNotificationRead: (id) => request(`/notifications/${id}/read`, { method: "POST", auth: true }),
+  markAllNotificationsRead: () => request("/notifications/read-all", { method: "POST", auth: true }),
 
   // Admin only. status: "pending" | "approved" | "rejected" | "suspended" (omit for all).
   getAdminShops: (status) => request(`/admin/shops${status ? `?status=${status}` : ""}`, { auth: true }),

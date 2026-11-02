@@ -4,7 +4,9 @@ const Order = require("../models/Order");
 const Checkout = require("../models/Checkout");
 const paypal = require("../utils/paypal");
 const { buildOrderFromCart } = require("./orderController");
-const { buildReleases } = require("../utils/payouts");
+const { buildReleases, artisanIdFor } = require("../utils/payouts");
+const Artisan = require("../models/Artisan");
+const { notify } = require("../utils/notify");
 
 // PayPal checkout (Orders v2, intent CAPTURE). The browser only ever sends a PayPal order id;
 // amounts are always computed here from the buyer's cart, and the order is created only after
@@ -151,6 +153,11 @@ async function capturePaypalOrder(req, res) {
     cart.items = cart.items.filter((i) => !paid.has(`${i.product}|${i.tier}`));
     await cart.save();
   }
+  // Only the claim above gets here, so a double click can't notify the shop twice.
+  await notify(async () => {
+    const artisanId = await artisanIdFor(order);
+    return artisanId && (await Artisan.findById(artisanId).select("user"))?.user;
+  }, "order_paid", { orderId: order._id, units: order.items.reduce((sum, i) => sum + i.qty, 0) }, `/orders/${order._id}`);
   res.status(201).json({ orderId: order._id });
 }
 

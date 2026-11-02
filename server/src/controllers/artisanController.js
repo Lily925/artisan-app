@@ -4,6 +4,7 @@ const { sendPendingForArtisan } = require("../utils/payouts");
 const mongoose = require("mongoose");
 const { ARTISAN_USER_PUBLIC } = require("../config/constants");
 const { LIVE_SHOP_FILTER, SHOP_NAME, shopNameTaken, createShop } = require("../utils/shops");
+const { notifyAdminsOfNewShop } = require("../utils/notify");
 
 // Fields an artisan may change on their own profile, with the JSON type each
 // accepts. Everything else (shopName, specialty, certified, photoUrl, user) stays
@@ -68,6 +69,7 @@ async function setupMyShop(req, res) {
   }
   try {
     const artisan = await createShop({ user: req.user.id, shopName, location, bio, instagramHandle, certified: false, status: "pending" });
+    await notifyAdminsOfNewShop(artisan);
     await artisan.populate("user", "name email");
     res.status(201).json(artisan);
   } catch (err) {

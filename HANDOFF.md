@@ -157,6 +157,11 @@ The 8 seeded placeholder products (emoji instead of a photo) of the demo artisan
 4. The payment shows in the sandbox business account. Sandbox orders that are never approved expire on their own.
 5. Payouts: put a sandbox **Personal** account email in the artisan's shop profile (payout email) and move the order through In production / Shipped, then confirm receipt as the buyer. Each step sends one payout from the sandbox business account; the order page shows them as Sent to PayPal, then Paid out once PayPal reports SUCCESS. A made-up email gives UNCLAIMED (returned after 30 days).
 
+## Notifications (2026-11-02)
+
+- **Notifications:** `models/Notification` stores a type, a few params and an in-app link, never translated text; the frontend builds the MN/EN/KO message (`t.notifications.text`, `notificationHelpers.js`). All are created through `utils/notify.js`, which never throws and drops any param a type doesn't allow. `GET /api/notifications` (latest 30, `unreadCount`), `POST /api/notifications/read-all`, `POST /api/notifications/:id/read`. The header polls every 45 seconds while the tab is visible and after each action (`useNotifications.js`, `usePolling.js`, `USER_ACTED_EVENT` in `api.js`).
+- **Limits** (per user, per minute): 120 notification reads, 60 notification writes. In memory, like the other limits.
+
 ## Security (review of 2026-10-12)
 
 - **Startup** (`config/env.js`): the server refuses to start unless `JWT_SECRET` is at least 32 characters, and with `NODE_ENV=production` unless every required variable is set (MONGODB_URI, JWT_SECRET, CLIENT_URL, PAYPAL_*, CLOUDINARY_*; names listed, values never printed). See `DEPLOY.md`. Tokens are HS256 only (signed and verified with a pinned algorithm); the role is always re-read from the database.
@@ -182,7 +187,7 @@ The 8 seeded placeholder products (emoji instead of a photo) of the demo artisan
 
 ## Pending / deferred
 
-- **Features:** email verification (not started); PayPal refunds and webhooks (payout status is only refreshed when an order page is opened); an admin view for failed/returned payouts; shipping address and cancel flow for orders; commission follow-through after a bid is accepted (status changes, artisan-side view of won jobs, notifications).
+- **Features:** email verification (not started); PayPal refunds and webhooks (payout status is only refreshed when an order page is opened); an admin view for failed/returned payouts; shipping address and cancel flow for orders; commission follow-through after a bid is accepted (status changes, artisan-side view of won jobs).
 - **Deployment:** Cloudinary credentials on the host, real credentials (don't ship `artisan123`; the `@example.com` email is a placeholder), `REACT_APP_API_URL`, tighter CORS (it currently allows any site).
 - **Deferred by the owner:** comments (needs moderation/spam handling/UI design); product descriptions in Mongolian and Korean (English only for now).
 - **Waiting on the owner:** a cleaner purple necklace photo (the current one shows Instagram's arrow and dots); optionally a higher-resolution logo (the current one is 189 px).
@@ -201,7 +206,7 @@ The 8 seeded placeholder products (emoji instead of a photo) of the demo artisan
   - Real views only count from 2026-10-06 on. The 2 views on 2026-10-12 (Silver Necklace, Crystal & Pearl) are test views by `buyer@artisan.mn`.
   - Conversion divides all-time orders by views counted since 2026-10-06, so a product with older orders and few views looks inflated (Silver Necklace: 1 order ÷ 1 view = 100%).
   - Empty states: when the selected chart metric is 0 for all 30 days, the chart is replaced by a short message ("No sales/views in the last 30 days yet…").
-  - Orders: the artisan sees no buyer name or address (consistent with the dashboard's privacy rule), and there's no shipping address at checkout, so actual shipping still happens outside the app. No cancel flow, no notifications when a step changes.
+  - Orders: the artisan sees no buyer name or address (consistent with the dashboard's privacy rule), and there's no shipping address at checkout, so actual shipping still happens outside the app. No cancel flow.
   - The product page shipping box ("Milestone-based escrow…") and the commission page steps still mention escrow payments that don't exist; the cart note was replaced on 2026-10-12.
   - Demo seed (`seed:demo`) only uses Patron where a product has a bonus; shipped/completed Story/Patron demo items get a placeholder video link (`https://example.com/demo-video/order-N-M`, `DEMO_VIDEO_URL` in demoData.js).
   - Milestones were tested end to end on 2026-10-12 (51 API checks + a browser run as buyer and Narantsetseg, plus another-artisan / other-buyer isolation); the test orders and the temporary buyer were deleted afterwards. Test product views from that run remain on Narantsetseg's Felt Wallet and Jewelry Set.

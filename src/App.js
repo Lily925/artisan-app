@@ -21,6 +21,8 @@ import ShopSetup from "./components/ShopSetup";
 import ShopStatusBanner from "./components/ShopStatusBanner";
 import AdminShops from "./components/AdminShops";
 import ProductCard from "./components/ProductCard";
+import { useNotifications } from "./useNotifications";
+import { parseLink } from "./notificationHelpers";
 
 // One switcher sets both: the UI language and the display currency that goes with it.
 // Money is always USD on the server; other currencies are a display-only conversion.
@@ -378,6 +380,8 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUserId]);
 
+  const notifications = useNotifications(Boolean(currentUserId), handleApiError);
+
   const handleLogin = async (email, password) => {
     const { token, user } = await api.login(email, password);
     setToken(token);
@@ -443,6 +447,13 @@ export default function App() {
   const onPaid = (orderId) =>
     Promise.all([refreshCart(), refreshOrders()]).then(() => { showToast(t.paypal.paid); openOrder(orderId); });
   const openOrder = (id, back = "profile") => { setOrderView({ id, back }); navigate("order-detail"); window.scrollTo(0, 0); };
+  // A notification's in-app link. Anything unknown stays on the current page.
+  const openLink = (link) => {
+    const target = parseLink(link);
+    if (!target) return;
+    if (target.orderId) openOrder(target.orderId);
+    else if (target.page) { navigate(target.page); window.scrollTo(0, 0); }
+  };
 
   const submitCommission = (data) =>
     api.createCommission(data).catch((err) => {
@@ -548,6 +559,7 @@ export default function App() {
         onSearchSubmit={() => navigate("shop")}
         cartCount={cartCount} wishlistCount={savedItems.length}
         currentUser={{ ...currentUser, avatar: currentUserAvatar }} navigate={navigate} t={t}
+        notifications={notifications} fmtAmt={fmtAmt} onOpenLink={openLink}
       />
 
       {isArtisan && !shopSetupNeeded && <ShopStatusBanner t={t} status={shopStatus.status} reason={shopStatus.reason} />}

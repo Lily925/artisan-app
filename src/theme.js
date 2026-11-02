@@ -25,6 +25,24 @@ export const THEME_CSS = `
   .a-icon-btn{background:none;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;width:44px;height:44px;min-width:44px;border-radius:2px;color:${COLORS.ink};transition:background 0.15s;position:relative;flex-shrink:0;}
   .a-icon-btn:hover{background:${COLORS.bgSoft};}
 
+  .a-nav-icon{color:${COLORS.accentDark};}
+  .a-nav-icon:hover{color:${COLORS.ink};}
+  .a-nav-icon:focus-visible{outline:2px solid ${COLORS.accentDark};outline-offset:-2px;}
+
+  /* Notifications: a panel under the header, lined up with the page's right edge; a bottom sheet on phones. */
+  .a-notif-panel{position:fixed;right:max(24px,calc((100vw - 1280px)/2 + 24px));width:min(380px,calc(100vw - 48px));max-height:min(70vh,520px);display:flex;flex-direction:column;background:${COLORS.card};border:1px solid ${COLORS.border};border-radius:2px;box-shadow:0 12px 36px rgba(59,42,50,0.18);z-index:300;}
+  .a-notif-backdrop{display:none;}
+  .a-notif-item{display:flex;gap:10px;align-items:flex-start;width:100%;min-height:44px;padding:12px 16px;background:none;border:none;border-bottom:1px solid ${COLORS.border};cursor:pointer;text-align:left;font-family:${FONT_SANS};}
+  .a-notif-item:hover{background:${COLORS.bgSoft};}
+  .a-notif-item:focus-visible{outline:2px solid ${COLORS.accentDark};outline-offset:-2px;}
+  .a-notif-item.unread{background:${COLORS.bg};}
+  .a-notif-item.unread:hover{background:${COLORS.bgSoft};}
+  .a-notif-dot{width:8px;height:8px;min-width:8px;border-radius:50%;background:${COLORS.accentDark};margin-top:5px;}
+  @media (max-width:640px){
+    .a-notif-backdrop{display:block;position:fixed;inset:0;background:rgba(59,42,50,0.35);z-index:299;}
+    .a-notif-panel{top:auto!important;left:0;right:0;bottom:0;width:100%;max-height:75vh;max-height:75dvh;border-width:1px 0 0;padding-bottom:env(safe-area-inset-bottom);}
+  }
+
   .a-chip{border:1.5px solid ${COLORS.border};border-radius:2px;padding:10px 18px;font-family:${FONT_SANS};font-size:13px;font-weight:600;cursor:pointer;background:${COLORS.card};color:${COLORS.ink};transition:all 0.15s;min-height:44px;white-space:nowrap;flex-shrink:0;}
   .a-chip:hover{border-color:${COLORS.accentDark};color:${COLORS.accentDark};}
   .a-chip.selected{background:${COLORS.accent};border-color:${COLORS.accentDark};color:${COLORS.ink};}
@@ -59,6 +77,19 @@ export const THEME_CSS = `
   .a-nav-row{padding-top:12px;padding-bottom:12px;display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;}
   .a-nav-group{display:flex;gap:4px;flex-shrink:0;}
   .a-search-form{flex:1 1 200px;min-width:160px;}
+
+  /* Phones: logo + account, then language + icons, then search (hidden on the chat page,
+     which needs the height). */
+  @media (max-width:640px){
+    .a-nav-row{gap:8px;padding-top:8px;padding-bottom:8px;}
+    .a-nav-brand{flex:1;order:0;}
+    .a-nav-user{order:1;max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    .a-locale-switch{order:2;}
+    .a-locale-btn{padding:0 6px;min-width:40px;}
+    .a-nav-icons{order:3;margin-left:auto;}
+    .a-search-form{order:4;flex-basis:100%;}
+    .a-nav-row.compact .a-search-form{display:none;}
+  }
 
   /* Product lists: as many ~220px+ columns as fit (desktop 4-5, tablet 2-3, phone 1-2). */
   .a-product-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,220px),1fr));gap:20px;}

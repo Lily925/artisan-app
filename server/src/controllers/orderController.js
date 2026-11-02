@@ -8,6 +8,7 @@ const { offersPatron } = require("../utils/pricing");
 const { orderTotals } = require("../utils/orderTotals");
 const payouts = require("../utils/payouts");
 const { shopIsLive } = require("../utils/shops");
+const { notify } = require("../utils/notify");
 
 // Turns the buyer's cart into order items + totals, or explains why it can't be ordered.
 // Used by PayPal checkout (paymentController.js). Returns { cart, items, totals } or { error }.
@@ -250,7 +251,16 @@ async function advanceOrder(req, res) {
   } catch (err) {
     console.error(`Releasing payouts for order ${updated._id} failed: ${err.message}`);
   }
+  await notifyOrderStep(updated, access.artisanId, wanted);
   res.json(await orderDetail({ ...access, order: latest }));
+}
+
+// The conditional update above lets only one request through per step, so each is sent once.
+async function notifyOrderStep(order, artisanId, status) {
+  const link = `/orders/${order._id}`;
+  const shop = artisanId ? await Artisan.findById(artisanId).select("user shopName").catch(() => null) : null;
+  await notify(order.user, `order_${status}`, { orderId: order._id, shopName: shop?.shopName }, link);
+  if (status === "completed") await notify(shop?.user, "order_confirmed", { orderId: order._id }, link);
 }
 
 // Accepts only absolute https:// links (no embedded credentials), up to MAX_VIDEO_URL characters.

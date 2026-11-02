@@ -49,4 +49,9 @@ const checkoutCreate = rateLimit({ windowMs: 10 * MIN, max: 10, key: (req) => re
   message: "Too many payment attempts. Please wait a few minutes and try again." });
 const checkoutCapture = rateLimit({ windowMs: 10 * MIN, max: 20, key: (req) => req.user && `user:${req.user.id}` });
 
-module.exports = { rateLimit, loginByIp, loginByAccount, signupByIp, passwordChange, checkoutCreate, checkoutCapture };
+// Notifications, per user. The app polls every 45 seconds per tab and after each action, so
+// these leave plenty of room for several tabs.
+const notificationReads = rateLimit({ windowMs: MIN, max: 120, key: (req) => req.user && `user:${req.user.id}` });
+const notificationWrites = rateLimit({ windowMs: MIN, max: 60, key: (req) => req.user && `user:${req.user.id}` });
+
+module.exports = { rateLimit, loginByIp, loginByAccount, signupByIp, passwordChange, checkoutCreate, checkoutCapture, notificationReads, notificationWrites };

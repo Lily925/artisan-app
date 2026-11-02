@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const Artisan = require("../models/Artisan");
 const Product = require("../models/Product");
 const { SHOP_STATUSES } = require("../utils/shops");
+const { notify } = require("../utils/notify");
 
 // Admin only (see routes/adminRoutes). Shops are listed with the owner's name only: no
 // email, phone or payout email.
@@ -71,6 +72,8 @@ async function changeShopStatus(req, res) {
   shop.reviewedAt = new Date();
   shop.reviewedBy = req.user.id;
   await shop.save();
+  // Unsuspending also lands on "approved": the shop is live again.
+  await notify(shop.user?._id, `shop_${to}`, { shopId: shop._id, ...(to === "rejected" && { reason: shop.statusReason }) }, "/profile");
   const productCount = await Product.countDocuments({ artisan: shop._id });
   res.json(shopView(shop, new Map([[String(shop._id), productCount]])));
 }

@@ -1,18 +1,14 @@
 import { COLORS, FONT_SERIF } from "../theme";
+import { CartIcon, HeartIcon } from "./NavIcons";
+import CountBadge from "./CountBadge";
+import NotificationBell from "./NotificationBell";
 
 const LOCALES = [["en", "$"], ["mn", "₮"], ["ko", "₩"]];
-
-function CountBadge({ count }) {
-  return (
-    <span aria-hidden="true" style={{ position:"absolute", top:2, right:2, background:COLORS.accentDark, color:"#fff", borderRadius:"50%", width:16, height:16, fontSize:9, fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center" }}>
-      {count}
-    </span>
-  );
-}
 
 export default function Nav({
   lang, setLang, searchQuery, setSearchQuery, onSearchSubmit,
   cartCount, wishlistCount, currentUser, navigate, t,
+  notifications, fmtAmt, onOpenLink,
 }) {
   const nav = t.nav;
 
@@ -21,6 +17,7 @@ export default function Nav({
       <div className="a-container a-nav-row">
         <a
           href="/"
+          className="a-nav-brand"
           onClick={(e) => { e.preventDefault(); navigate("home"); }}
           style={{ fontFamily:FONT_SERIF, fontSize:26, fontWeight:700, color:COLORS.ink, textDecoration:"none", flexShrink:0 }}
         >
@@ -48,18 +45,22 @@ export default function Nav({
           ))}
         </div>
 
-        <button type="button" className="a-icon-btn" aria-label={nav.wishlistAria(wishlistCount)} onClick={() => navigate("saved")}>
-          <span aria-hidden="true" style={{ fontSize:20 }}>♡</span>
-          {wishlistCount > 0 && <CountBadge count={wishlistCount} />}
-        </button>
+        <div className="a-nav-group a-nav-icons" style={{ gap:0 }}>
+          {notifications && <NotificationBell t={t} notifications={notifications} fmtAmt={fmtAmt} onOpenLink={onOpenLink} />}
 
-        <button type="button" className="a-icon-btn" aria-label={nav.cartAria(cartCount)} onClick={() => navigate("cart")}>
-          <span aria-hidden="true" style={{ fontSize:20 }}>🛍</span>
-          {cartCount > 0 && <CountBadge count={cartCount} />}
-        </button>
+          <button type="button" className="a-icon-btn a-nav-icon" aria-label={nav.wishlistAria(wishlistCount)} onClick={() => navigate("saved")}>
+            <HeartIcon />
+            <CountBadge count={wishlistCount} />
+          </button>
+
+          <button type="button" className="a-icon-btn a-nav-icon" aria-label={nav.cartAria(cartCount)} onClick={() => navigate("cart")}>
+            <CartIcon />
+            <CountBadge count={cartCount} />
+          </button>
+        </div>
 
         {currentUser ? (
-          <button type="button" className="a-btn-outline" style={{ padding:"9px 18px", fontSize:12, minHeight:40 }} onClick={() => navigate("profile")}>
+          <button type="button" className="a-btn-outline a-nav-user" style={{ padding:"9px 18px", fontSize:12, minHeight:40 }} onClick={() => navigate("profile")}>
             {currentUser.name}
           </button>
         ) : (
