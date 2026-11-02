@@ -114,6 +114,15 @@ try {
   check("approved artisan can publish a product → 201", r.status === 201, `${r.status} ${r.body.error || ""}`);
   created.productId = r.body._id;
   check("product is public", ids((await call("/products")).body).includes(created.productId));
+  const privateData = /@|passwordHash|payoutEmail|statusReason|reviewedBy|likedBy|viewCount|savedReplies|chatGreeting/;
+  r = await call("/products");
+  check("visitors can read the product list, with no private data", r.status === 200 && !privateData.test(r.text));
+  r = await call(`/products/${created.productId}`);
+  check("visitors can read a product page, with no private data", r.status === 200 && !privateData.test(r.text), r.text.slice(0, 80));
+  r = await call("/artisans");
+  check("visitors can read the shop list, with no private data", r.status === 200 && !privateData.test(r.text));
+  check("a visitor's product view is accepted", (await call(`/products/${created.productId}/view`, { method: "POST" })).status < 500);
+  check("account data still needs a login", (await call("/cart")).status === 401 && (await call("/orders")).status === 401 && (await call("/notifications")).status === 401 && (await call("/conversations")).status === 401);
   check("buyer can add it to the cart", (await call("/cart", { method: "POST", token: buyerToken, json: { productId: created.productId, tier: "basic" } })).status === 201);
   await call("/cart", { method: "DELETE", token: buyerToken, json: { productId: created.productId, tier: "basic" } });
 

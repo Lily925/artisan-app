@@ -72,7 +72,7 @@ export default function Nav({
             {currentUser.name}
           </button>
         ) : (
-          <button type="button" className="a-btn-primary" style={{ padding:"9px 18px", fontSize:12, minHeight:40 }} onClick={() => navigate("login")}>
+          <button type="button" className="a-btn-primary a-nav-user" style={{ padding:"9px 18px", fontSize:12, minHeight:40 }} onClick={() => navigate("login")}>
             {nav.login}
           </button>
         )}

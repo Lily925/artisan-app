@@ -4,6 +4,7 @@ import App from './App';
 // The app loads products and exchange rates on start; keep those requests pending so the
 // test never touches the network (no API or exchange-rate service needed).
 beforeEach(() => {
+  window.scrollTo = () => {};
   jest.spyOn(global, 'fetch').mockImplementation(() => new Promise(() => {}));
 });
 
@@ -11,8 +12,11 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
-test('logged-out visitors see the login page with the brand and login/register tabs', () => {
+const openLogin = () => fireEvent.click(screen.getByRole('button', { name: 'Login' }));
+
+test('the login page has the brand and login/register tabs', () => {
   render(<App />);
+  openLogin();
   expect(screen.getByText('Artisan')).toBeInTheDocument();
   const tabs = screen.getAllByRole('tab');
   expect(tabs).toHaveLength(2);
@@ -21,6 +25,7 @@ test('logged-out visitors see the login page with the brand and login/register t
 
 test('signing up as an artisan asks for the shop and sends only the chosen role', async () => {
   render(<App />);
+  openLogin();
   fireEvent.click(screen.getAllByRole('tab')[1]); // Register
   expect(screen.queryByLabelText(/Shop name/)).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('radio', { name: /I want to sell my crafts/ }));

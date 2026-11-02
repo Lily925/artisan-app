@@ -164,6 +164,10 @@ The 8 seeded placeholder products (emoji instead of a photo) of the demo artisan
 - **Decisions:** buyers start conversations; the one exception is the artisan of an order opening the chat with that order's buyer. A conversation isn't listed until someone writes a real message, so opening a chat and leaving doesn't reach the shop; the greeting is sent when the buyer opens a new chat, counts as read and makes no notification. Several messages in one chat share one unread notification (`notifyNewMessage`, with a count); reading the chat clears it. The message text is never in a notification. A new product or order replaces the earlier pinned card. A suspended shop's chats stay readable, but neither side can send.
 - **Limits** (per user, per minute): 20 messages, 60 conversation starts, 120 chat reads, 120 notification reads, 60 notification writes. In memory, like the other limits.
 
+## Public browsing (2026-11-02)
+
+Logged-out visitors see home, shop, product pages and shop pages (`PUBLIC_PAGES` in `App.js`), with a Login button and no bell or Messages. Any other page, adding to the cart and liking open the login page; Back returns to where they were, and signing in goes on to the page they wanted. "Sign in to message" replaces "Message shop" on shop and product pages (`MessageShopButton.js`). The server already allowed these reads; account data still needs a login. As before, refreshing goes to home.
+
 ## Security (review of 2026-10-12)
 
 - **Startup** (`config/env.js`): the server refuses to start unless `JWT_SECRET` is at least 32 characters, and with `NODE_ENV=production` unless every required variable is set (MONGODB_URI, JWT_SECRET, CLIENT_URL, PAYPAL_*, CLOUDINARY_*; names listed, values never printed). See `DEPLOY.md`. Tokens are HS256 only (signed and verified with a pinned algorithm); the role is always re-read from the database.

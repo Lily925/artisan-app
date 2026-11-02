@@ -36,6 +36,9 @@ function savedLang() {
   } catch { return "en"; }
 }
 
+// What a logged-out visitor can see. Anything else asks them to sign in first, then goes there.
+const PUBLIC_PAGES = ["home", "shop", "detail", "storefront", "artisan-profile"];
+
 const SHOP_NAME = /^[\p{L}\p{N}][\p{L}\p{N} ._&'-]{1,59}$/u; // same rule as the server
 const SHOP_DESCRIPTION_MAX = 500;
 const AVATAR_BY_ROLE = { admin: "🧑‍💼", artisan: "👩‍🎨", buyer: "🛍" };
@@ -47,7 +50,7 @@ const DEMO_ACCOUNTS = process.env.NODE_ENV !== "production" ? [
   { name: "Buyer Demo", email: "buyer@artisan.mn", password: "artisan123" },
 ] : [];
 
-function LoginPage({ onLogin, onRegister, lang }) {
+function LoginPage({ onLogin, onRegister, onBack, lang }) {
   const [tab, setTab] = useState("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -60,10 +63,10 @@ function LoginPage({ onLogin, onRegister, lang }) {
   const [shopDescription, setShopDescription] = useState("");
 
   const lbl = lang==="mn"
-    ? { login:"Нэвтрэх", register:"Бүртгүүлэх", email:"Имэйл", pw:"Нууц үг", name:"Нэр", loginBtn:"Нэвтрэх", registerBtn:"Бүртгүүлэх", noAcc:"Бүртгэл байхгүй юу?", hasAcc:"Бүртгэл байна уу?", wrongPw:"Имэйл эсвэл нууц үг буруу", demo:"Туршилтаар нэвтрэх:", appSub:"Монгол гар урлалын зах зээл", fillAll:"Бүх талбарыг бөглөнө үү", accountType:"Бүртгэлийн төрөл", buyerTitle:"Би худалдан авна", buyerSub:"Гар урлалын бүтээл худалдан авч, тусгай захиалга өгнө.", artisanTitle:"Би гар урлалаа зарна", artisanNote:"Урчны бүртгэлээр бүтээгдэхүүн нэмэх, захиалгаа удирдах, борлуулалтын самбараа харах боломжтой. Админ дэлгүүрийг тань зөвшөөрсний дараа дэлгүүр нээгдэнэ.", shopName:"Дэлгүүрийн нэр", shopNameHint:"2-60 тэмдэгт. Дараа нь өөрчлөх боломжгүй.", shopDesc:"Дэлгүүрийн товч тайлбар", shopDescHint:"Юу хийдэг, хэрхэн хийдэг вэ?", nameInvalid:"Дэлгүүрийн нэр 2-60 тэмдэгт байх ёстой: үсэг, тоо, хоосон зай болон . _ - & '", nameTaken:"Энэ дэлгүүрийн нэр бүртгэлтэй байна", emailTaken:"Энэ имэйл бүртгэлтэй байна" }
+    ? { back:"Artisan руу буцах", login:"Нэвтрэх", register:"Бүртгүүлэх", email:"Имэйл", pw:"Нууц үг", name:"Нэр", loginBtn:"Нэвтрэх", registerBtn:"Бүртгүүлэх", noAcc:"Бүртгэл байхгүй юу?", hasAcc:"Бүртгэл байна уу?", wrongPw:"Имэйл эсвэл нууц үг буруу", demo:"Туршилтаар нэвтрэх:", appSub:"Монгол гар урлалын зах зээл", fillAll:"Бүх талбарыг бөглөнө үү", accountType:"Бүртгэлийн төрөл", buyerTitle:"Би худалдан авна", buyerSub:"Гар урлалын бүтээл худалдан авч, тусгай захиалга өгнө.", artisanTitle:"Би гар урлалаа зарна", artisanNote:"Урчны бүртгэлээр бүтээгдэхүүн нэмэх, захиалгаа удирдах, борлуулалтын самбараа харах боломжтой. Админ дэлгүүрийг тань зөвшөөрсний дараа дэлгүүр нээгдэнэ.", shopName:"Дэлгүүрийн нэр", shopNameHint:"2-60 тэмдэгт. Дараа нь өөрчлөх боломжгүй.", shopDesc:"Дэлгүүрийн товч тайлбар", shopDescHint:"Юу хийдэг, хэрхэн хийдэг вэ?", nameInvalid:"Дэлгүүрийн нэр 2-60 тэмдэгт байх ёстой: үсэг, тоо, хоосон зай болон . _ - & '", nameTaken:"Энэ дэлгүүрийн нэр бүртгэлтэй байна", emailTaken:"Энэ имэйл бүртгэлтэй байна" }
     : lang==="ko"
-    ? { login:"로그인", register:"회원가입", email:"이메일", pw:"비밀번호", name:"이름", loginBtn:"로그인", registerBtn:"회원가입", noAcc:"계정이 없으신가요?", hasAcc:"이미 계정이 있으신가요?", wrongPw:"이메일 또는 비밀번호가 틀렸습니다", demo:"데모 로그인:", appSub:"몽골 전통 공예 마켓", fillAll:"모든 항목을 입력해주세요", accountType:"계정 유형", buyerTitle:"구매하고 싶어요", buyerSub:"핸드메이드 작품을 구매하고 맞춤 주문을 할 수 있어요.", artisanTitle:"내 공예품을 판매하고 싶어요", artisanNote:"장인 계정으로 상품 등록, 주문 관리, 판매 대시보드를 이용할 수 있어요. 관리자가 상점을 승인하면 상점이 공개돼요.", shopName:"상점 이름", shopNameHint:"2~60자. 나중에 바꿀 수 없어요.", shopDesc:"상점 소개 (짧게)", shopDescHint:"무엇을, 어떻게 만드나요?", nameInvalid:"상점 이름은 2~60자의 글자, 숫자, 공백, . _ - & ' 만 쓸 수 있어요", nameTaken:"이미 사용 중인 상점 이름이에요", emailTaken:"이미 가입된 이메일이에요" }
-    : { login:"Login", register:"Register", email:"Email", pw:"Password", name:"Name", loginBtn:"Login", registerBtn:"Create Account", noAcc:"Don't have an account?", hasAcc:"Already have an account?", wrongPw:"Incorrect email or password", demo:"Demo login:", appSub:"Mongolian Handmade Marketplace", fillAll:"Please fill all fields", accountType:"Account type", buyerTitle:"I want to buy", buyerSub:"Shop handmade pieces and order custom work.", artisanTitle:"I want to sell my crafts", artisanNote:"An artisan account lets you add products, manage orders and see your sales dashboard. Your shop opens once an admin approves it.", shopName:"Shop name", shopNameHint:"2-60 characters. It can't be changed later.", shopDesc:"Short shop description", shopDescHint:"What do you make, and how?", nameInvalid:"Shop name must be 2-60 characters: letters, numbers, spaces and . _ - & '", nameTaken:"That shop name is already taken", emailTaken:"That email is already registered" };
+    ? { back:"Artisan으로 돌아가기", login:"로그인", register:"회원가입", email:"이메일", pw:"비밀번호", name:"이름", loginBtn:"로그인", registerBtn:"회원가입", noAcc:"계정이 없으신가요?", hasAcc:"이미 계정이 있으신가요?", wrongPw:"이메일 또는 비밀번호가 틀렸습니다", demo:"데모 로그인:", appSub:"몽골 전통 공예 마켓", fillAll:"모든 항목을 입력해주세요", accountType:"계정 유형", buyerTitle:"구매하고 싶어요", buyerSub:"핸드메이드 작품을 구매하고 맞춤 주문을 할 수 있어요.", artisanTitle:"내 공예품을 판매하고 싶어요", artisanNote:"장인 계정으로 상품 등록, 주문 관리, 판매 대시보드를 이용할 수 있어요. 관리자가 상점을 승인하면 상점이 공개돼요.", shopName:"상점 이름", shopNameHint:"2~60자. 나중에 바꿀 수 없어요.", shopDesc:"상점 소개 (짧게)", shopDescHint:"무엇을, 어떻게 만드나요?", nameInvalid:"상점 이름은 2~60자의 글자, 숫자, 공백, . _ - & ' 만 쓸 수 있어요", nameTaken:"이미 사용 중인 상점 이름이에요", emailTaken:"이미 가입된 이메일이에요" }
+    : { back:"Back to Artisan", login:"Login", register:"Register", email:"Email", pw:"Password", name:"Name", loginBtn:"Login", registerBtn:"Create Account", noAcc:"Don't have an account?", hasAcc:"Already have an account?", wrongPw:"Incorrect email or password", demo:"Demo login:", appSub:"Mongolian Handmade Marketplace", fillAll:"Please fill all fields", accountType:"Account type", buyerTitle:"I want to buy", buyerSub:"Shop handmade pieces and order custom work.", artisanTitle:"I want to sell my crafts", artisanNote:"An artisan account lets you add products, manage orders and see your sales dashboard. Your shop opens once an admin approves it.", shopName:"Shop name", shopNameHint:"2-60 characters. It can't be changed later.", shopDesc:"Short shop description", shopDescHint:"What do you make, and how?", nameInvalid:"Shop name must be 2-60 characters: letters, numbers, spaces and . _ - & '", nameTaken:"That shop name is already taken", emailTaken:"That email is already registered" };
 
   const handleLogin = async (loginEmail = email, loginPassword = password) => {
     if (!loginEmail || !loginPassword) { setError(lbl.fillAll); return; }
@@ -111,6 +114,7 @@ function LoginPage({ onLogin, onRegister, lang }) {
       `}</style>
       <div className="a-page" style={{ minHeight:"100vh", display:"flex", alignItems:"center" }}>
       <div className="login-card">
+        <button type="button" className="a-shop-link" style={{ fontFamily:FONT_SANS, fontSize:13, minHeight:44, color:COLORS.inkSoft, marginBottom:8 }} onClick={onBack}>‹ {lbl.back}</button>
         <div style={{ textAlign:"center", marginBottom:28 }}>
           <div style={{ fontFamily:FONT_SERIF, fontSize:44, fontWeight:700, color:COLORS.ink, letterSpacing:-0.5 }}>Artisan</div>
           <div style={{ fontSize:11, color:COLORS.accentDark, letterSpacing:2.5, textTransform:"uppercase", marginTop:4, fontWeight:700 }}>{lbl.appSub}</div>
@@ -273,7 +277,12 @@ export default function App() {
   });
   const [lang, setLang] = useState(savedLang);
   const currency = CURRENCY_BY_LANG[lang];
-  const [page, setPage] = useState("home");
+  const [requestedPage, setPage] = useState("home");
+  // Logged out, only public pages and login can show; signed in, login has nothing to show.
+  const page = currentUser
+    ? (requestedPage === "login" ? "home" : requestedPage)
+    : (requestedPage === "login" || PUBLIC_PAGES.includes(requestedPage) ? requestedPage : "home");
+  const [loginReturn, setLoginReturn] = useState({ back: "home", after: "home" }); // where login's Back and success go
   const [pageKey, setPageKey] = useState(0);
   const [selected, setSelected] = useState(null);
   const [storeArtisan, setStoreArtisan] = useState(null); // artisan whose storefront is open
@@ -389,6 +398,8 @@ export default function App() {
     setToken(token);
     localStorage.setItem("artisan-user", JSON.stringify(user));
     setCurrentUser(user);
+    setPage(loginReturn.after);
+    window.scrollTo(0, 0);
   };
   // accountType is only a request: the server accepts "buyer" or "artisan" and nothing else.
   // Artisans also send shop: { shopName, shopDescription }; the new shop waits for approval.
@@ -397,16 +408,18 @@ export default function App() {
     setToken(token);
     localStorage.setItem("artisan-user", JSON.stringify(user));
     setCurrentUser(user);
+    setPage(loginReturn.after);
+    window.scrollTo(0, 0);
   };
 
-  if (!currentUser) return <LoginPage onLogin={handleLogin} onRegister={handleRegister} lang={lang} />;
+  if (page === "login") return <LoginPage onLogin={handleLogin} onRegister={handleRegister} lang={lang} onBack={() => setPage(loginReturn.back)} />;
 
   const t = i18n[lang];
   // Shop pages can't work without a shop profile, so they show the setup form until it exists.
   const SHOP_SETUP_GATED = ["shop-setup", "dashboard", "shop-orders", "shop-settings", "add-product", "edit-product"];
-  const showShopSetup = currentUser.role === "artisan" && shopSetupNeeded && SHOP_SETUP_GATED.includes(page);
-  const currentUserAvatar = AVATAR_BY_ROLE[currentUser.role] || "🙂";
-  const isArtisan = currentUser.role === "artisan";
+  const showShopSetup = currentUser?.role === "artisan" && shopSetupNeeded && SHOP_SETUP_GATED.includes(page);
+  const currentUserAvatar = AVATAR_BY_ROLE[currentUser?.role] || "🙂";
+  const isArtisan = currentUser?.role === "artisan";
   const shopLive = isArtisan && !shopSetupNeeded && shopStatus.status === "approved";
 
   // An admin may have approved / suspended the shop meanwhile: re-check on the shop's own pages.
@@ -414,13 +427,17 @@ export default function App() {
     api.getMyArtisan()
       .then((a) => setShopStatus({ status: a.status || "approved", reason: a.statusReason || "" }))
       .catch((err) => { if (err.status === 401) handleApiError(err); });
+  // Back returns to this page; signing in goes on to `after` (the page they were heading to).
+  const openLogin = (after = page) => { setLoginReturn({ back: page, after }); setPage("login"); window.scrollTo(0, 0); };
   const navigate = (pg) => {
+    if (!currentUser && !PUBLIC_PAGES.includes(pg)) return openLogin(pg === "login" ? page : pg);
     if (isArtisan && !shopSetupNeeded && ["profile", "add-product", "edit-product", "shop-settings"].includes(pg)) refreshShopStatus();
     setPage(pg); setPageKey(k => k + 1);
   };
   // Heart = like. Flip the heart immediately, then take liked state + count from the server.
   const toggleSave = (id, e) => {
     if (e) e.stopPropagation();
+    if (!currentUser) return openLogin();
     const wasLiked = savedItems.includes(id);
     const setLiked = (liked) => setSavedItems(s => liked ? (s.includes(id) ? s : [...s, id]) : s.filter(x => x !== id));
     setLiked(!wasLiked);
@@ -438,9 +455,9 @@ export default function App() {
     if (err instanceof ApiError && err.code === "OTHER_SHOP") showToast(t.orders.otherShop);
     else handleApiError(err);
   };
-  const addToCart = (productId, tier, qty = 1) =>
+  const addToCart = (productId, tier, qty = 1) => (!currentUser ? openLogin() :
     api.addCartItem(productId, tier, qty).then((c) => { setCart(c); showToast(t.addCart); })
-      .catch((err) => (err instanceof ApiError && err.code === "PATRON_UNAVAILABLE" ? showToast(t.orders.patronUnavailable) : cartError(err)));
+      .catch((err) => (err instanceof ApiError && err.code === "PATRON_UNAVAILABLE" ? showToast(t.orders.patronUnavailable) : cartError(err))));
   const updateQty = (productId, tier, qty) =>
     api.updateCartItem(productId, tier, qty).then(setCart).catch(handleApiError);
   const removeFromCart = (productId, tier) =>
@@ -579,8 +596,8 @@ export default function App() {
         searchQuery={searchQuery} setSearchQuery={setSearchQuery}
         onSearchSubmit={() => navigate("shop")}
         cartCount={cartCount} wishlistCount={savedItems.length}
-        currentUser={{ ...currentUser, avatar: currentUserAvatar }} navigate={navigate} t={t}
-        notifications={notifications} fmtAmt={fmtAmt} onOpenLink={openLink} onOpenInbox={openInbox} compact={page==="messages"}
+        currentUser={currentUser && { ...currentUser, avatar: currentUserAvatar }} navigate={navigate} t={t}
+        notifications={currentUser ? notifications : null} fmtAmt={fmtAmt} onOpenLink={openLink} onOpenInbox={openInbox} compact={page==="messages"}
       />
 
       {isArtisan && !shopSetupNeeded && <ShopStatusBanner t={t} status={shopStatus.status} reason={shopStatus.reason} />}
@@ -617,7 +634,7 @@ export default function App() {
           lang={lang} t={t} selected={selected} savedItems={savedItems}
           toggleSave={toggleSave} addToCart={addToCart} fmtAmt={fmtAmt}
           navigate={navigate} openStorefront={openStorefront} openArtisanProfile={openArtisanProfile}
-          currentUserId={currentUser.id} canEdit={shopLive}
+          currentUserId={currentUser?.id} canEdit={shopLive}
           viewer={currentUser} onMessageShop={() => startChat({ productId: selected.id })} onSignIn={() => navigate("login")}
           onEdit={() => { navigate("edit-product"); window.scrollTo(0, 0); }}
           onDelete={deleteOwnProduct}
