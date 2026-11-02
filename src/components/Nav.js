@@ -8,7 +8,7 @@ const LOCALES = [["en", "$"], ["mn", "₮"], ["ko", "₩"]];
 export default function Nav({
   lang, setLang, searchQuery, setSearchQuery, onSearchSubmit,
   cartCount, wishlistCount, currentUser, navigate, t,
-  notifications, fmtAmt, onOpenLink, compact = false,
+  notifications, fmtAmt, onOpenLink, onOpenInbox, compact = false,
 }) {
   const nav = t.nav;
 
@@ -50,7 +50,7 @@ export default function Nav({
 
           {/* Admins take no part in chats. */}
           {notifications && currentUser?.role !== "admin" && (
-            <button type="button" className="a-icon-btn a-nav-icon" aria-label={nav.messagesAria(notifications.unreadMessages)} onClick={() => navigate("messages")}>
+            <button type="button" className="a-icon-btn a-nav-icon" aria-label={nav.messagesAria(notifications.unreadMessages)} onClick={onOpenInbox}>
               <ChatIcon />
               <CountBadge count={notifications.unreadMessages} />
             </button>

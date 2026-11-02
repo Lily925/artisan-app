@@ -129,6 +129,25 @@ try {
   r = await start(buyerT, { shopId: String(plainShop._id) });
   check("a shop with no greeting sends nothing", r.status === 201 && (await Message.countDocuments({ conversation: r.body.conversation.id })) === 0 && !(await Conversation.findById(r.body.conversation.id)).greetingSent);
 
+  // ── no duplicates, also when several starts arrive at once ──
+  const raceShopIds = await Promise.all([1, 2].map(async (i) => {
+    const raceOwner = await mk(`raceowner${i}`, "artisan");
+    return mkShop(raceOwner, `race${i}`, "approved", { chatGreeting: "Race greeting" });
+  }));
+  const raceBuyer = await mk("racebuyer", "buyer");
+  const raceT = await login("racebuyer");
+  const racing = await Promise.all(Array.from({ length: 8 }, () => start(raceT, { shopId: String(raceShopIds[0]._id) })));
+  check("8 starts at once all succeed, with the same conversation", racing.every((x) => [200, 201].includes(x.status)) && new Set(racing.map((x) => x.body.conversation?.id)).size === 1, racing.map((x) => x.status).join());
+  check("…only one of them created it", racing.filter((x) => x.body.created).length === 1);
+  check("…one conversation in the database", (await Conversation.countDocuments({ buyer: raceBuyer._id, shop: raceShopIds[0]._id })) === 1);
+  check("…and one greeting", (await Message.countDocuments({ conversation: racing[0].body.conversation?.id })) === 1);
+  const productOfRace = await Product.create(productDoc(raceShopIds[1]));
+  r = await start(raceT, { shopId: String(raceShopIds[1]._id) });
+  const fromShop = r.body.conversation?.id;
+  r = await start(raceT, { productId: String(productOfRace._id) });
+  check("starting from the shop page and then its product page gives one conversation", r.status === 200 && r.body.conversation.id === fromShop);
+  check("…and it is a different one for another shop", fromShop !== racing[0].body.conversation?.id);
+
   // ── context cards ──
   r = await start(buyerT, { productId: String(product._id) });
   check("from a product page: same conversation", r.status === 200 && r.body.conversation.id === id);

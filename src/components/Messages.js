@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { COLORS, FONT_SANS, FONT_SERIF } from "../theme";
 import { api, assetUrl } from "../api";
+import { artisanInfo } from "../artisanInfo";
 import { timeAgo } from "../notificationHelpers";
 import { useVisiblePolling } from "../usePolling";
 import ArtisanAvatar from "./ArtisanAvatar";
@@ -29,6 +30,12 @@ const CSS = `
   .msg-card:hover{background:${COLORS.bgSoft};}
   .msg-chips{display:flex;gap:6px;overflow-x:auto;padding:8px 12px 0;}
   .msg-chips .a-chip{padding:6px 12px;min-height:36px;font-size:12px;border-radius:16px;}
+  .msg-empty{grid-column:1/-1;overflow-y:auto;padding:40px 20px;text-align:center;}
+  .msg-shops{list-style:none;margin:0 auto;padding:0;max-width:720px;display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;}
+  .msg-shop{display:flex;flex-direction:column;align-items:center;gap:8px;width:100%;height:100%;min-height:44px;padding:16px 10px;background:${COLORS.bg};border:1px solid ${COLORS.border};border-radius:2px;cursor:pointer;font-family:${FONT_SANS};transition:border-color 0.15s,background 0.15s;}
+  .msg-shop:hover{border-color:${COLORS.accentDark};background:${COLORS.bgSoft};}
+  .msg-shop:focus-visible{outline:2px solid ${COLORS.accentDark};outline-offset:2px;}
+  .msg-shop:disabled{opacity:0.6;cursor:default;}
   .msg-input{flex:1;min-width:0;min-height:44px;max-height:120px;resize:none;border:1.5px solid ${COLORS.border};border-radius:2px;padding:10px 12px;font-family:${FONT_SANS};font-size:14px;line-height:1.4;background:${COLORS.card};color:${COLORS.ink};}
   .msg-input:focus{outline:none;border-color:${COLORS.accentDark}!important;box-shadow:0 0 0 3px rgba(232,169,188,0.3)!important;}
   @media (max-width:720px){
@@ -206,9 +213,46 @@ function Chat({ t, lang, chat, fmtAmt, onOpenProduct, onOpenOrder, onBack, onSen
   );
 }
 
+// No conversations yet. Buyers get a way in: browse, or start with one of up to 4 shops
+// (name and avatar only). Artisans can't start chats, so they only get the explanation.
+function EmptyInbox({ t, role, shops, onStartChat, navigate }) {
+  const m = t.messages;
+  const isBuyer = role === "buyer";
+  const [starting, setStarting] = useState(null);
+  const start = async (id) => {
+    setStarting(id);
+    try { await onStartChat(id); } finally { setStarting(null); }
+  };
+  return (
+    <div className="msg-empty">
+      <h2 style={{ fontFamily:FONT_SERIF, fontSize:26, fontWeight:600, color:COLORS.ink, marginBottom:8 }}>{isBuyer ? m.emptyTitle : m.emptyTitleArtisan}</h2>
+      <p className="a-readable" style={{ fontFamily:FONT_SANS, fontSize:14, color:COLORS.inkSoft, lineHeight:1.6, margin:"0 auto 20px" }}>{isBuyer ? m.emptyBody : m.emptyBodyArtisan}</p>
+      {isBuyer && <button type="button" className="a-btn-primary" onClick={() => { navigate("shop"); window.scrollTo(0, 0); }}>{m.browseShops}</button>}
+      {isBuyer && shops.length > 0 && (
+        <section aria-labelledby="msg-suggested" style={{ marginTop:32 }}>
+          <h3 id="msg-suggested" className="a-label" style={{ marginBottom:12 }}>{m.suggestedShops}</h3>
+          <ul className="msg-shops">
+            {shops.slice(0, 4).map((shop) => {
+              const { displayName, avatarUrl, photoUrl } = artisanInfo(shop);
+              return (
+                <li key={shop._id}>
+                  <button type="button" className="msg-shop" disabled={starting !== null} aria-label={m.startChatWith(displayName)} onClick={() => start(shop._id)}>
+                    <ArtisanAvatar name={displayName} photoUrl={avatarUrl || assetUrl(photoUrl)} size={56} />
+                    <span style={{ fontSize:13, fontWeight:700, color:COLORS.ink, overflowWrap:"anywhere" }}>{displayName}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+    </div>
+  );
+}
+
 // Conversations on the left, the open chat on the right; one or the other on phones.
 // openRequest = { id }: open that conversation (from a button or a notification).
-export default function Messages({ t, lang, fmtAmt, openRequest, onOpenProduct, onOpenOrder, onApiError, navigate }) {
+export default function Messages({ t, lang, fmtAmt, openRequest, onOpenProduct, onOpenOrder, onApiError, navigate, role = "buyer", suggestedShops = [], onStartChat }) {
   const m = t.messages;
   const [conversations, setConversations] = useState(null); // null = loading
   const [listFailed, setListFailed] = useState(false);
@@ -284,11 +328,14 @@ export default function Messages({ t, lang, fmtAmt, openRequest, onOpenProduct, 
   // A chat just opened with no real message yet isn't in the server's list: show it anyway.
   const shown = conversations && chat && !conversations.some((c) => c.id === chat.id) ? [chat.conversation, ...conversations] : conversations;
 
+  const inboxEmpty = !activeId && !listFailed && shown?.length === 0;
+
   return (
     <div className="a-container msg-page" style={{ "--msg-header":`${headerHeight}px` }}>
       <style>{CSS}</style>
       <h1 className="a-sr-only">{m.title}</h1>
       <div className={`msg-layout${activeId ? " has-active" : ""}`}>
+        {inboxEmpty ? <EmptyInbox t={t} role={role} shops={suggestedShops} onStartChat={onStartChat} navigate={navigate} /> : <>
         <nav className="msg-list" aria-label={m.title}>
           <h2 style={{ fontFamily:FONT_SERIF, fontSize:22, fontWeight:600, color:COLORS.ink, padding:"12px 14px", borderBottom:`1px solid ${COLORS.border}` }}>{m.title}</h2>
           {shown === null ? <p style={{ fontFamily:FONT_SANS, color:COLORS.inkSoft, padding:16 }}>…</p>
@@ -298,7 +345,7 @@ export default function Messages({ t, lang, fmtAmt, openRequest, onOpenProduct, 
                 <button type="button" className="a-shop-link" style={{ fontWeight:700, color:COLORS.accentDark }} onClick={loadList}>{m.retry}</button>
               </div>
             ) : shown.length === 0 ? (
-              <p style={{ fontFamily:FONT_SANS, fontSize:13, color:COLORS.inkSoft, padding:"32px 16px", textAlign:"center", lineHeight:1.5 }}>{m.listEmpty}</p>
+              <p style={{ fontFamily:FONT_SANS, fontSize:13, color:COLORS.inkSoft, padding:"32px 16px", textAlign:"center", lineHeight:1.5 }}>…</p>
             ) : shown.map((c) => (
               <button key={c.id} type="button" className={`msg-row${c.id === activeId ? " active" : ""}`} aria-current={c.id === activeId ? "true" : undefined} onClick={() => setActiveId(c.id)}>
                 <ArtisanAvatar name={c.other.name} photoUrl={assetUrl(c.other.photo)} size={40} />
@@ -334,6 +381,7 @@ export default function Messages({ t, lang, fmtAmt, openRequest, onOpenProduct, 
               onOpenProduct={onOpenProduct} onOpenOrder={onOpenOrder} onBack={() => setActiveId(null)} onSent={sendMessage} onLoadOlder={loadOlder} />
           )}
         </section>
+        </>}
       </div>
     </div>
   );

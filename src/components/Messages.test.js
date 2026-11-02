@@ -139,13 +139,51 @@ test('empty and error states', async () => {
   const state = { list: [], chat: {} };
   mockApi(state);
   const { unmount } = renderChat({ openRequest: null });
-  expect(await screen.findByText(t.messages.listEmpty)).toBeInTheDocument();
-  expect(screen.getByText(t.messages.pick)).toBeInTheDocument();
+  expect(await screen.findByRole('heading', { name: t.messages.emptyTitle })).toBeInTheDocument();
+  expect(screen.queryByText(t.messages.pick)).not.toBeInTheDocument();
   unmount();
 
   state.listError = true;
   renderChat({ openRequest: null });
   expect(await screen.findByRole('alert')).toHaveTextContent(t.messages.listError);
+});
+
+const shopOf = (n) => ({ _id: `s${n}`, shopName: `Shop ${n}`, photoUrl: '', contactInfo: 'call +97699112233', location: 'Secret Street 1', payoutEmail: 'pay@example.com', user: { _id: `u${n}`, name: `Owner ${n}`, email: 'owner@example.com', avatarUrl: '' } });
+
+test('empty inbox for a buyer: explanation, Browse shops, and up to 4 shops that start a chat', async () => {
+  mockApi({ list: [], chat: {} });
+  const navigate = jest.fn();
+  const onStartChat = jest.fn(() => Promise.resolve());
+  window.scrollTo = () => {};
+  const { container } = renderChat({ openRequest: null, navigate, onStartChat, suggestedShops: [1, 2, 3, 4, 5].map(shopOf) });
+  await screen.findByText(t.messages.emptyBody);
+
+  fireEvent.click(screen.getByRole('button', { name: t.messages.browseShops }));
+  expect(navigate).toHaveBeenCalledWith('shop');
+
+  expect(screen.getAllByRole('button', { name: /^Start a chat with/ })).toHaveLength(4);
+  expect(screen.queryByText('Shop 5')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Start a chat with Shop 2' }));
+  expect(onStartChat).toHaveBeenCalledWith('s2');
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Start a chat with Shop 1' })).toBeEnabled());
+
+  // Name and avatar only.
+  expect(container.querySelector('.msg-empty').textContent).not.toMatch(/@|\+976|Secret Street|Owner \d/);
+});
+
+test('empty inbox with no shops to suggest still offers Browse shops', async () => {
+  mockApi({ list: [], chat: {} });
+  renderChat({ openRequest: null, suggestedShops: [] });
+  expect(await screen.findByRole('button', { name: t.messages.browseShops })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /^Start a chat with/ })).not.toBeInTheDocument();
+});
+
+test('empty inbox for an artisan: no shops to start a chat with, since only buyers can', async () => {
+  mockApi({ list: [], chat: {} });
+  renderChat({ openRequest: null, role: 'artisan', suggestedShops: [shopOf(1)] });
+  expect(await screen.findByText(t.messages.emptyBodyArtisan)).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: t.messages.browseShops })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /^Start a chat with/ })).not.toBeInTheDocument();
 });
 
 test('polls the open chat every 15 seconds and the list every 45; both pause while hidden', async () => {

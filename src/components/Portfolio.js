@@ -6,6 +6,7 @@ import ArtisanAvatar from "./ArtisanAvatar";
 import InstagramIcon from "./InstagramIcon";
 import Footer from "./Footer";
 import ProductImage from "./ProductImage";
+import MessageShopButton, { messageShopMode } from "./MessageShopButton";
 
 // Filter + sort only pay off once there's a real list to look through.
 const FILTER_SORT_MIN = 7;
@@ -74,8 +75,9 @@ function ProductTile({ product, name, price, tiers, tierName, liked, likeLabel, 
 // Public portfolio page of one artisan (shop + personal profile in one): header, all
 // products (filter/sort when there are many), about, how it works, closing call to action. Only public data: no email, phone, address or contact note.
 // `products` must already exclude hidden ones. `focus="about"` scrolls to the About section.
-export default function Portfolio({ lang, t, artisan, products, savedItems, toggleSave, openProduct, fmtBasic, navigate, onBack, focus, onMessageShop }) {
+export default function Portfolio({ lang, t, artisan, products, savedItems, toggleSave, openProduct, fmtBasic, navigate, onBack, focus, viewer = null, onMessageShop, onSignIn }) {
   const pf = t.portfolio;
+  const isOwner = Boolean(viewer) && String(artisan.user?._id) === String(viewer.id);
   const { ownerName, shopName, displayName, instagramHandle, instagramUrl, photoUrl, avatarUrl, personalBio, yearsExperience, location } = artisanInfo(artisan);
   const [category, setCategory] = useState("");
   const [sort, setSort] = useState("newest");
@@ -144,8 +146,8 @@ export default function Portfolio({ lang, t, artisan, products, savedItems, togg
               </p>
             )}
             <div className="pf-row">
-              {onMessageShop && <button type="button" className="a-btn-primary" onClick={onMessageShop}>{t.messages.messageShop}</button>}
-              {igButton(pf.instagram, !onMessageShop)}
+              <MessageShopButton t={t} viewer={viewer} isOwner={isOwner} onMessage={onMessageShop} onSignIn={onSignIn} />
+              {igButton(pf.instagram, !messageShopMode(viewer, isOwner))}
               <span className="pf-stat">{pf.statProducts(products.length)}</span>
               <span className="pf-stat">♡ {pf.statLikes(likes)}</span>
             </div>

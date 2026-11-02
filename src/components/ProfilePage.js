@@ -73,7 +73,7 @@ function OrderRow({ first, title, sub, amount, onOpen }) {
 // Buyers: stats, order history, liked items.
 export default function ProfilePage({
   t, lang, user, emoji, products, savedItems, toggleSave, openProduct, fmtBasic, fmtAmt,
-  cartLines, orders, openOrder, navigate, logout, onUpdated, onApiError, shopSetupNeeded, shopLive = false, unreadMessages = 0,
+  cartLines, orders, openOrder, navigate, logout, onUpdated, onApiError, shopSetupNeeded, shopLive = false, unreadMessages = 0, onOpenInbox,
 }) {
   const pp = t.profilePage;
   const o = t.orders;
@@ -163,7 +163,7 @@ export default function ProfilePage({
               <div style={{ marginTop:12, display:"flex", gap:8, justifyContent:"center", flexWrap:"wrap" }}>
                 <button type="button" className="a-btn-outline" style={actionBtn} onClick={() => navigate("my-commissions")}>{t.commissions.mineOpen}</button>
                 {user.role !== "admin" && (
-                  <button type="button" className="a-btn-outline" style={{ ...actionBtn, position:"relative" }} aria-label={t.nav.messagesAria(unreadMessages)} onClick={() => navigate("messages")}>
+                  <button type="button" className="a-btn-outline" style={{ ...actionBtn, position:"relative" }} aria-label={t.nav.messagesAria(unreadMessages)} onClick={onOpenInbox}>
                     {t.messages.title}
                     <CountBadge count={unreadMessages} />
                   </button>

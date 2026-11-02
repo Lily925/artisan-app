@@ -458,6 +458,8 @@ export default function App() {
     else if (target.page) { navigate(target.page); window.scrollTo(0, 0); }
   };
   const openChat = (id) => { setChatRequest({ id }); navigate("messages"); window.scrollTo(0, 0); };
+  // The inbox itself (header, profile): not whichever chat was opened last.
+  const openInbox = () => { setChatRequest(null); navigate("messages"); window.scrollTo(0, 0); };
   // "Message shop" / "Message the artisan" / "Message the buyer". target: { shopId } | { productId } | { orderId }
   const startChat = (target) =>
     api.startConversation(target)
@@ -539,6 +541,8 @@ export default function App() {
   // they can still open them; every public list leaves them out.
   // Same for the artisan's own products while their shop isn't approved.
   const publicProducts = products.filter(p => !p.isHidden && (!p.artisan?.status || p.artisan.status === "approved"));
+  // For an empty inbox: shops with something to ask about, one per shop.
+  const suggestedShops = [...new Map(publicProducts.filter(p => p.artisan?._id).map(p => [p.artisan._id, p.artisan])).values()].slice(0, 4);
   const storeArtisanLive = liveArtisan(storeArtisan);
   const profileArtisanLive = liveArtisan(profileArtisan);
 
@@ -576,7 +580,7 @@ export default function App() {
         onSearchSubmit={() => navigate("shop")}
         cartCount={cartCount} wishlistCount={savedItems.length}
         currentUser={{ ...currentUser, avatar: currentUserAvatar }} navigate={navigate} t={t}
-        notifications={notifications} fmtAmt={fmtAmt} onOpenLink={openLink} compact={page==="messages"}
+        notifications={notifications} fmtAmt={fmtAmt} onOpenLink={openLink} onOpenInbox={openInbox} compact={page==="messages"}
       />
 
       {isArtisan && !shopSetupNeeded && <ShopStatusBanner t={t} status={shopStatus.status} reason={shopStatus.reason} />}
@@ -614,7 +618,7 @@ export default function App() {
           toggleSave={toggleSave} addToCart={addToCart} fmtAmt={fmtAmt}
           navigate={navigate} openStorefront={openStorefront} openArtisanProfile={openArtisanProfile}
           currentUserId={currentUser.id} canEdit={shopLive}
-          onMessageShop={currentUser.role==="buyer" ? () => startChat({ productId: selected.id }) : undefined}
+          viewer={currentUser} onMessageShop={() => startChat({ productId: selected.id })} onSignIn={() => navigate("login")}
           onEdit={() => { navigate("edit-product"); window.scrollTo(0, 0); }}
           onDelete={deleteOwnProduct}
         />
@@ -630,7 +634,7 @@ export default function App() {
             savedItems={savedItems} toggleSave={toggleSave} openProduct={openProduct}
             fmtBasic={fmtBasic} navigate={navigate} onBack={goBack}
             focus={page==="artisan-profile" ? "about" : undefined}
-            onMessageShop={currentUser.role==="buyer" ? () => startChat({ shopId: a._id }) : undefined}
+            viewer={currentUser} onMessageShop={() => startChat({ shopId: a._id })} onSignIn={() => navigate("login")}
           />
         );
       })()}
@@ -704,6 +708,7 @@ export default function App() {
         <Messages
           t={t} lang={lang} fmtAmt={fmtAmt} openRequest={chatRequest} navigate={navigate} onApiError={handleApiError}
           onOpenProduct={openProductById} onOpenOrder={(id) => openOrder(id, "messages")}
+          role={currentUser.role} suggestedShops={suggestedShops} onStartChat={(shopId) => startChat({ shopId })}
         />
       )}
 
@@ -763,7 +768,7 @@ export default function App() {
           products={products} savedItems={savedItems} toggleSave={toggleSave} openProduct={openProduct}
           fmtBasic={fmtBasic} fmtAmt={fmtAmt} cartLines={cart?.items?.length || 0}
           orders={orders} openOrder={openOrder} navigate={navigate} logout={logout} shopSetupNeeded={shopSetupNeeded} shopLive={shopLive}
-          onApiError={handleApiError} unreadMessages={notifications.unreadMessages}
+          onApiError={handleApiError} unreadMessages={notifications.unreadMessages} onOpenInbox={openInbox}
           onUpdated={(user) => { updateCurrentUser(user); if (currentUser.role === "artisan") refreshProducts(); }}
         />
       )}
