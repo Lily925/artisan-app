@@ -1,18 +1,16 @@
 // API tests for "Change password" (PUT /api/auth/password).
-// Run with the API running (npm run dev / npm start):  npm run test:password (also part of test:api)
+// Starts its own throwaway database and API (setup.mjs):  npm run test:password (also part of test:api)
 // Test accounts (pw-test-*@test.invalid) are created directly in the database, so no sign-ups
 // are used, and are deleted at the end, also when a check fails.
+import { API, connectDB, stopTestEnv } from "./setup.mjs";
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
-require("dotenv").config();
 import crypto from "crypto";
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
-const connectDB = require("../src/config/db");
 const User = require("../src/models/User");
 
-const API = process.env.API_URL || `http://localhost:${process.env.PORT || 5000}/api`;
 let pass = 0, fail = 0;
 const check = (n, ok, x = "") => { ok ? pass++ : fail++; console.log(`${ok ? "PASS" : "FAIL"}  ${n}${x ? "  — " + x : ""}`); };
 const call = async (path, { method = "GET", token, json } = {}) => {
@@ -102,6 +100,7 @@ try {
   console.log(`cleanup: removed ${deletedCount} test accounts`);
   await mongoose.disconnect();
 }
+await stopTestEnv();
 console.log(`
 ${pass} passed, ${fail} failed`);
 process.exitCode = fail ? 1 : 0;

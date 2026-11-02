@@ -16,7 +16,7 @@ const StoredImage = require("../models/StoredImage");
 //     only. In production (NODE_ENV=production) the server refuses to start instead,
 //     because most hosts wipe the local disk on restart/redeploy.
 // The credentials are only ever passed to the Cloudinary SDK, never logged or returned.
-const UPLOAD_ROOT = path.join(__dirname, "..", "..", "uploads");
+const UPLOAD_ROOT = process.env.UPLOAD_ROOT || path.join(__dirname, "..", "..", "uploads"); // UPLOAD_ROOT: a temporary folder in the tests
 const EXT_BY_TYPE = { "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp" };
 const TYPE_ERROR = "Photo must be a JPEG, PNG or WebP image";
 const MB = 1024 * 1024;
