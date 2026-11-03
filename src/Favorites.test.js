@@ -53,7 +53,7 @@ test('the owner has no heart on their product: cards, product page, shop page, p
   await screen.findByRole('heading', { name: 'My products' });
   await screen.findAllByRole('link', { name: /Boots/ });
   expect(hearts()).toHaveLength(0); // profile card
-});
+}, 15000); // visits four pages; can pass the default 5 seconds on a busy machine
 
 test('a buyer keeps the heart in those places', async () => {
   signIn(buyerUser);
