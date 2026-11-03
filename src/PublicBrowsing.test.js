@@ -33,6 +33,7 @@ beforeEach(() => {
     if (path === `/products/${product._id}/view`) return reply({});
     if (path === `/products/${product._id}`) return reply(product);
     if (path === `/artisans/${artisan._id}`) return reply(artisan);
+    if (path === `/products/${product._id}/reviews`) return reply({ summary: { count: 0, average: 0, breakdown: {} }, reviews: [], page: 1, pages: 1 });
     if (!signedIn) return reply({ error: 'Missing token' }, 401);
     if (path === '/notifications') return reply({ items: [], unreadCount: 0, unreadMessages: 0 });
     if (path === '/cart') return reply({ items: [] });

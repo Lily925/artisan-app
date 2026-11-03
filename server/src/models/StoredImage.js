@@ -9,7 +9,7 @@ const storedImageSchema = new mongoose.Schema(
   {
     url: { type: String, required: true, unique: true },
     publicId: { type: String, required: true },
-    kind: { type: String, enum: ["product", "avatar", "static"], required: true },
+    kind: { type: String, enum: ["product", "avatar", "review", "static"], required: true },
     // Migration only: the old local path ("/uploads/..." or "/images/..."), so a re-run
     // reuses the same upload instead of making a new one.
     source: { type: String, index: true, sparse: true },

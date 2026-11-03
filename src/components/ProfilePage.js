@@ -53,7 +53,8 @@ function Onboarding({ t, steps }) {
   );
 }
 
-export function OrderRow({ first, title, sub, amount, onOpen }) {
+// action: a button under the row (it can't go inside the row, which is a button itself).
+export function OrderRow({ first, title, sub, amount, onOpen, action }) {
   return (
     <li style={{ borderTop: first ? "none" : `1px solid ${COLORS.border}` }}>
       <button type="button" onClick={onOpen}
@@ -64,6 +65,7 @@ export function OrderRow({ first, title, sub, amount, onOpen }) {
         </span>
         <span style={{ fontFamily:FONT_SANS, fontSize:14, fontWeight:700, color:COLORS.accentDark, whiteSpace:"nowrap" }}>{amount} ›</span>
       </button>
+      {action && <div style={{ paddingBottom:12 }}>{action}</div>}
     </li>
   );
 }
@@ -74,7 +76,7 @@ export function OrderRow({ first, title, sub, amount, onOpen }) {
 // Buyers: stats, order history, liked items.
 export default function ProfilePage({
   t, lang, user, emoji, products, savedItems, toggleSave, fmtBasic, fmtAmt,
-  cartLines, orders, openOrder, navigate, logout, onUpdated, onApiError, shopSetupNeeded, shopLive = false, unreadMessages = 0, onOpenInbox,
+  cartLines, orders, openOrder, navigate, logout, onUpdated, onApiError, shopSetupNeeded, shopLive = false, unreadMessages = 0, onOpenInbox, onReview,
 }) {
   const pp = t.profilePage;
   const o = t.orders;
@@ -119,7 +121,7 @@ export default function ProfilePage({
       <ProductCard
       product={p} nameMn={p.title} nameEn={p.titleEn} lang={lang}
       isOwn={isOwnProduct(p, user.id)} isSaved={savedItems.includes(p.id)} onToggleSave={toggleSave} price={fmtBasic(p)}
-      certifiedLabel={t.homePage.certified} wishlistAddLabel={t.homePage.wishlistAdd} wishlistRemoveLabel={t.homePage.wishlistRemove}
+      certifiedLabel={t.homePage.certified} wishlistAddLabel={t.homePage.wishlistAdd} wishlistRemoveLabel={t.homePage.wishlistRemove} ratingAria={t.reviews.ratingAria}
     />
     </div>
   );
@@ -159,6 +161,7 @@ export default function ProfilePage({
               {user.role === "admin" && (
                 <div style={{ marginTop:20 }}>
                   <button type="button" className="a-btn-primary" style={actionBtn} onClick={() => navigate("admin-shops")}>🛡 {t.adminShops.open}</button>
+                  <button type="button" className="a-btn-outline" style={{ ...actionBtn, marginLeft:8 }} onClick={() => navigate("admin-reviews")}>{t.reviews.admin.open}</button>
                 </div>
               )}
               <div style={{ marginTop:12, display:"flex", gap:8, justifyContent:"center", flexWrap:"wrap" }}>
@@ -219,7 +222,8 @@ export default function ProfilePage({
                     <OrderRow key={order._id} first={i === 0} onOpen={() => openOrder(order._id)}
                       title={o.items(order.items.length)}
                       sub={`${new Date(order.createdAt).toLocaleDateString()} · ${o.status[order.status] || order.status}`}
-                      amount={fmtAmt(order.total)} />
+                      amount={fmtAmt(order.total)}
+                      action={order.nextReviewItem != null && <button type="button" className="a-btn-outline" style={{ padding:"8px 16px", fontSize:13, minHeight:40 }} onClick={() => onReview(order._id, order.nextReviewItem)}>★ {t.reviews.write}</button>} />
                   ))}
                 </ul>
               )}

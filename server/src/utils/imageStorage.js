@@ -5,7 +5,7 @@ const multer = require("multer");
 const cloudinary = require("cloudinary").v2;
 const StoredImage = require("../models/StoredImage");
 
-// Photo storage (product photos and profile photos): the one place every upload goes
+// Photo storage (product, profile and review photos): the one place every upload goes
 // through. Controllers only see URLs: save*Photo returns one, delete*Photo accepts one.
 //
 // Storage backend, chosen once at startup from server/.env:
@@ -21,13 +21,14 @@ const EXT_BY_TYPE = { "image/jpeg": ".jpg", "image/png": ".png", "image/webp": "
 const TYPE_ERROR = "Photo must be a JPEG, PNG or WebP image";
 const MB = 1024 * 1024;
 const CLOUDINARY_ENV = ["CLOUDINARY_CLOUD_NAME", "CLOUDINARY_API_KEY", "CLOUDINARY_API_SECRET"];
-const CLOUDINARY_ROOT = "artisan"; // assets go to artisan/products, artisan/avatars, artisan/migrated
+const CLOUDINARY_ROOT = "artisan"; // assets go to artisan/products, artisan/avatars, artisan/reviews, artisan/migrated
 
 // One entry per kind of photo: local folder and URL prefix, Cloudinary folder, size limit
 // per file, and the multipart field (with how many files it takes).
 const KINDS = {
   product: { dir: path.join(UPLOAD_ROOT, "products"), prefix: "/uploads/products/", folder: `${CLOUDINARY_ROOT}/products`, maxBytes: 2 * MB, field: "photos", maxFiles: 5 },
   avatar: { dir: path.join(UPLOAD_ROOT, "avatars"), prefix: "/uploads/avatars/", folder: `${CLOUDINARY_ROOT}/avatars`, maxBytes: 2 * MB, field: "photo", maxFiles: 1 },
+  review: { dir: path.join(UPLOAD_ROOT, "reviews"), prefix: "/uploads/reviews/", folder: `${CLOUDINARY_ROOT}/reviews`, maxBytes: 2 * MB, field: "photos", maxFiles: 3 },
 };
 
 function chooseStorage() {
@@ -205,6 +206,10 @@ module.exports = {
   avatarUpload: photoUpload("avatar"),
   saveAvatarPhoto: (file) => savePhoto("avatar", file),
   deleteAvatarPhoto: (url) => deletePhoto("avatar", url),
+  MAX_REVIEW_PHOTOS: KINDS.review.maxFiles,
+  reviewPhotoUpload: photoUpload("review"),
+  saveReviewPhotos: (files) => savePhotos("review", files),
+  deleteReviewPhoto: (url) => deletePhoto("review", url),
   // For scripts/migrate-images-to-cloudinary.js only.
   storeOnCloudinary,
   sniffImageType,

@@ -44,6 +44,9 @@ const productSchema = new mongoose.Schema(
     // Product-page views, deduplicated per viewer per 24h (see utils/productViews.js).
     // Private to the owning artisan's dashboard, so hidden from API responses.
     viewCount: { type: Number, default: 0, min: 0, select: false },
+    // Visible reviews only, kept up to date by utils/reviews.refreshRatings.
+    ratingAvg: { type: Number, default: 0 },
+    ratingCount: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

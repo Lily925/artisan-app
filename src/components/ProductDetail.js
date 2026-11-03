@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { COLORS, FONT_SERIF, FONT_SANS } from "../theme";
 import { PAGE_PATHS } from "../paths";
 import CopyLinkButton from "./CopyLinkButton";
+import { RatingBadge } from "./StarRating";
 import { materialsByCat } from "../data";
 import { artisanInfo } from "../artisanInfo";
 import InstagramIcon from "./InstagramIcon";
@@ -87,6 +88,11 @@ export default function ProductDetail({ lang, t, selected, savedItems, toggleSav
             <h1 style={{ fontFamily:FONT_SERIF, fontSize:30, fontWeight:600, color:COLORS.ink, lineHeight:1.2, marginBottom:16 }}>
               {primaryName}
             </h1>
+            {selected.ratingCount > 0 && (
+              <a href="#reviews" style={{ display:"inline-block", marginBottom:14, textDecoration:"none" }}>
+                <RatingBadge avg={selected.ratingAvg} count={selected.ratingCount} aria={t.reviews.ratingAria} size={14} />
+              </a>
+            )}
             <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom: instagramUrl || contactInfo ? 10 : 18 }}>
               <ArtisanAvatar name={displayName} photoUrl={avatarUrl || shopPhotoUrl} size={32} />
               {shopName ? (

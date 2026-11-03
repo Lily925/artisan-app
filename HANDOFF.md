@@ -172,6 +172,18 @@ An artisan has no heart on their own products and the server refuses it (403 `OW
 
 Logged-out visitors see home, shop, product pages and shop pages, with a Login button and no bell or Messages. Any other page (`RequireAuth`), adding to the cart and liking open the login page; Back returns to where they were, and signing in goes on to the page they wanted. "Sign in to message" replaces "Message shop" on shop and product pages (`MessageShopButton.js`). The server already allowed these reads; account data still needs a login.
 
+## Verified reviews (2026-11-03)
+
+- **Rules, all on the server** (`controllers/reviewController.js`, `models/Review.js`, `utils/reviews.js`): only the buyer of a Completed order paid through PayPal (`isPaidByPayPal`) can review an item, once per order item (unique index on order + item), within 60 days of the order's recorded `completed` event (`withinWriteWindow`; no recorded date counts as outside), never their own shop's product. Someone else's order is a 404. Rating 1-5, comment up to 1000 characters (`utils/text.cleanText`, shared with chat), up to 3 photos through `imageStorage` (kind `review`; same types and 2 MB limit as product photos). `npm run test:reviews`.
+- **Public view:** the first word of the account name (`displayNameOf`; empty if it looks like an email or phone, and the page then says "Buyer"), a verified flag, rating, comment, photos, reply. Never a buyer or order id, except that a review's own buyer gets the order id for its edit link. `GET /api/products/:id/reviews?page=` follows the product's own visibility.
+- **Editing:** the buyer can edit or delete for 14 days from writing it (`EDIT_WINDOW_MS`), then it locks. **Deleting keeps an empty row, whose `createdAt` holds the original 14 days:** the buyer can write it again within them, on the same row, which doesn't restart them, notify the artisan or apply the 60-day limit. After that it's final. The artisan's reply goes with a deleted review, and a rewrite can get a new one.
+- **Artisan:** one public reply per review. For 14 days from the first reply (`replyFirstAt`) they can edit it, or delete it and post a new one; neither restarts the 14 days, and only the first reply notifies the buyer. After that it's final. No way to change or remove the review itself. **Deleting a product keeps its reviews in the shop's average**, so deleting isn't a way to remove bad reviews.
+- **Admin:** `/admin/reviews` hides with a required reason, and can undo it. Hidden reviews leave lists and averages; the author sees that it's hidden and why, and can no longer change it.
+- **Averages:** `ratingAvg` / `ratingCount` on Product and Artisan, recomputed from the reviews after each change (`refreshRatings`). Existing documents read as no reviews.
+- **Pages:** `ProductReviews.js` on the product page, `ReviewForm.js` at `/orders/:orderId/review/:itemIndex`, `AdminReviews.js`, `StarRating.js`. "Write a review" comes from `nextReviewItem` on `GET /api/orders` and `reviewState` on each item of `GET /api/orders/:id` (buyer only).
+- **Notifications:** `review_received` (artisan) and `review_replied` (buyer), linking to `/product/:id#reviews`. No review text or buyer name.
+- **Limits** (per user): 10 review creations per 10 minutes; 30 edits, deletes and replies per minute.
+
 ## URL routing (2026-11-03)
 
 - **Public:** `/`, `/shops` (the product list), `/category/:name`, `/shop/:slug`, `/shop/:slug/about`, `/product/:id`, `/signin`, `/signup`. Search is `?q=` on the two list pages.

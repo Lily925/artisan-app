@@ -55,6 +55,7 @@ export default function Home({ lang, t, prods, savedItems, toggleSave, fmt, navi
                 certifiedLabel={home.certified}
                 wishlistAddLabel={home.wishlistAdd}
                 wishlistRemoveLabel={home.wishlistRemove}
+                ratingAria={t.reviews.ratingAria}
               />
             );
           })}

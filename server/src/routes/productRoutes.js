@@ -6,6 +6,7 @@ const {
   listProducts, getProduct, createProduct, updateProduct, deleteProduct,
   likeProduct, unlikeProduct, listMyLikes, recordView,
 } = require("../controllers/productController");
+const { listProductReviews } = require("../controllers/reviewController");
 
 const router = express.Router();
 
@@ -14,6 +15,7 @@ router.get("/", optionalAuth, asyncHandler(listProducts));
 // must come before "/:id" so "liked" isn't treated as a product id
 router.get("/liked", requireAuth, asyncHandler(listMyLikes));
 router.get("/:id", optionalAuth, asyncHandler(getProduct));
+router.get("/:id/reviews", optionalAuth, asyncHandler(listProductReviews));
 router.post("/", requireAuth, requireRole("artisan"), productPhotoUpload, asyncHandler(createProduct));
 // Owner or admin only (checked in the controller, 403 otherwise): edit fields / photos, or delete.
 router.put("/:id", requireAuth, requireRole("artisan", "admin"), productPhotoUpload, asyncHandler(updateProduct));
