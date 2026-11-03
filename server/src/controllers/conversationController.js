@@ -6,6 +6,7 @@ const Product = require("../models/Product");
 const Order = require("../models/Order");
 const User = require("../models/User");
 const { isShopLive } = require("../utils/shops");
+const { cleanText } = require("../utils/text");
 const { orderArtisanId } = require("./orderController");
 
 // Buyer-to-shop chat. Only the conversation's buyer and the shop's owner get anywhere here;
@@ -21,8 +22,6 @@ const LIST_MAX = 50;
 const notFound = (res, what = "Conversation") => res.status(404).json({ error: `${what} not found` });
 const validId = (v) => typeof v === "string" && mongoose.isValidObjectId(v);
 const myShopOf = (userId) => Artisan.findOne({ user: userId }).select("_id");
-// Control characters other than tab and newline are dropped.
-const cleanText = (v) => (typeof v === "string" ? v.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "").trim() : "");
 
 const shopNotOpen = (res) => res.status(403).json({ error: "This shop can't receive messages right now", code: "SHOP_NOT_APPROVED" });
 

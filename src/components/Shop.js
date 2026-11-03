@@ -71,6 +71,7 @@ export default function Shop({ currentUserId, lang, t, filtered, loading, catego
                 certifiedLabel={home.certified}
                 wishlistAddLabel={home.wishlistAdd}
                 wishlistRemoveLabel={home.wishlistRemove}
+                ratingAria={t.reviews.ratingAria}
               />
             );
           })}

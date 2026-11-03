@@ -8,6 +8,7 @@ import Footer from "./Footer";
 import ProductImage from "./ProductImage";
 import MessageShopButton, { messageShopMode } from "./MessageShopButton";
 import CopyLinkButton from "./CopyLinkButton";
+import { RatingBadge } from "./StarRating";
 
 // Filter + sort only pay off once there's a real list to look through.
 const FILTER_SORT_MIN = 7;
@@ -43,7 +44,7 @@ const CSS = `
 `;
 
 // The first row is visible right away, so it loads eagerly; the rest lazily.
-function ProductTile({ product, name, price, tiers, tierName, liked, likeLabel, onToggleSave, onOpen, eager, canLike }) {
+function ProductTile({ product, name, price, tiers, tierName, liked, likeLabel, onToggleSave, onOpen, eager, canLike, ratingAria }) {
   const likeCount = product.likeCount || 0;
   return (
     <article className="pf-card">
@@ -65,6 +66,7 @@ function ProductTile({ product, name, price, tiers, tierName, liked, likeLabel, 
           <span style={{ fontFamily:FONT_SERIF, fontSize:20, fontWeight:600, color:COLORS.ink, lineHeight:1.25, overflowWrap:"anywhere" }}>{name}</span>
           <span style={{ fontFamily:FONT_SERIF, fontSize:20, fontWeight:700, color:COLORS.ink, whiteSpace:"nowrap" }}>{price}</span>
         </span>
+        <RatingBadge avg={product.ratingAvg} count={product.ratingCount} aria={ratingAria} size={13} />
         <span style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
           {tiers.map((k) => <span key={k} className="pf-badge">{tierName[k]}</span>)}
         </span>
@@ -152,6 +154,7 @@ export default function Portfolio({ lang, t, artisan, products, savedItems, togg
               <CopyLinkButton t={t} />
               <span className="pf-stat">{pf.statProducts(products.length)}</span>
               <span className="pf-stat">♡ {pf.statLikes(likes)}</span>
+              {artisan.ratingCount > 0 && <span className="pf-stat"><RatingBadge avg={artisan.ratingAvg} count={artisan.ratingCount} aria={t.reviews.ratingAria} size={13} /></span>}
             </div>
           </div>
         </header>
@@ -205,7 +208,7 @@ export default function Portfolio({ lang, t, artisan, products, savedItems, togg
                   return (
                     <ProductTile key={p.id} product={p} name={nameOf(p)} price={fmtBasic(p)} tiers={offeredTiers(p)} tierName={t.orders.tierName}
                       liked={liked} likeLabel={liked ? t.homePage.wishlistRemove : t.homePage.wishlistAdd}
-                      onToggleSave={toggleSave} onOpen={openProduct} eager={i < 4} canLike={!isOwner} />
+                      onToggleSave={toggleSave} onOpen={openProduct} eager={i < 4} canLike={!isOwner} ratingAria={t.reviews.ratingAria} />
                   );
                 })}
               </div>

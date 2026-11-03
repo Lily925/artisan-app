@@ -23,6 +23,9 @@ const PARAMS_BY_TYPE = {
   shop_pending: ["shopId", "shopName"],
   // Artisan (see notifyProductSaved): never who saved it
   product_saved: ["productId", "title", "titleEn", "count"],
+  // Artisan: a new review. Buyer: the artisan replied. Never the text, nor who wrote it.
+  review_received: ["productId", "title", "titleEn", "rating"],
+  review_replied: ["productId", "title", "titleEn", "shopName"],
 };
 // What the bell shows. Older types in the database (e.g. chat messages, which only have their
 // own badge now) are left out.

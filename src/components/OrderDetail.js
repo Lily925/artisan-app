@@ -69,7 +69,7 @@ function VideoForm({ o, order, item, onSaved, onApiError, showToast }) {
   );
 }
 
-function ItemRow({ o, lang, order, item, fmtAmt, shopName, onSaved, onApiError, showToast }) {
+function ItemRow({ t, o, lang, order, item, fmtAmt, shopName, onSaved, onApiError, showToast, onReview }) {
   const name = lang === "mn" ? item.title : item.titleEn || item.title;
   const bonus = item.patronBonus ? bonusText(item.patronBonus, lang) : "";
   const { isArtisan, isBuyer } = order.viewer;
@@ -113,6 +113,12 @@ function ItemRow({ o, lang, order, item, fmtAmt, shopName, onSaved, onApiError, 
               <VideoForm key={item.deliveryVideoUrl} o={o} order={order} item={item} onSaved={onSaved} onApiError={onApiError} showToast={showToast} />
             )}
           </div>
+        )}
+
+        {onReview && (item.reviewState?.canReview || item.reviewState?.review) && (
+          <button type="button" className="a-btn-outline" style={{ padding:"8px 16px", fontSize:13, minHeight:40, marginTop:10 }} onClick={() => onReview(order.id, item.index)}>
+            ★ {item.reviewState.canReview ? t.reviews.write : item.reviewState.review.editable ? t.reviews.editYours : t.reviews.viewYours}
+          </button>
         )}
       </div>
     </div>
@@ -183,7 +189,7 @@ function Payouts({ o, payout, fmtAmt, forArtisan }) {
   );
 }
 
-export default function OrderDetail({ t, lang, orderId, fmtAmt, onBack, onApiError, showToast, onChanged, onMessage }) {
+export default function OrderDetail({ t, lang, orderId, fmtAmt, onBack, onApiError, showToast, onChanged, onMessage, onReview }) {
   const o = t.orders;
   const [order, setOrder] = useState(null);
   const [failed, setFailed] = useState(false);
@@ -299,8 +305,8 @@ export default function OrderDetail({ t, lang, orderId, fmtAmt, onBack, onApiErr
       <section className="a-info-block a-order-items" style={{ marginBottom:20 }} aria-labelledby="order-items-title">
         <h2 id="order-items-title" style={sectionTitle}>{o.itemsTitle}</h2>
         {order.items.map((item) => (
-          <ItemRow key={item.index} o={o} lang={lang} order={order} item={item} fmtAmt={fmtAmt} shopName={shopName}
-            onSaved={setOrder} onApiError={onApiError} showToast={showToast} />
+          <ItemRow key={item.index} t={t} o={o} lang={lang} order={order} item={item} fmtAmt={fmtAmt} shopName={shopName}
+            onSaved={setOrder} onApiError={onApiError} showToast={showToast} onReview={onReview} />
         ))}
         <div style={{ borderTop:`1px solid ${COLORS.border}`, paddingTop:10 }}>
           <div style={row}><span>{o.subtotal}</span><span>{fmtAmt(order.subtotal)}</span></div>

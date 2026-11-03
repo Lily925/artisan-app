@@ -9,6 +9,7 @@ const { orderTotals } = require("../utils/orderTotals");
 const payouts = require("../utils/payouts");
 const { shopIsLive } = require("../utils/shops");
 const { notify } = require("../utils/notify");
+const { reviewStateFor } = require("../utils/reviews");
 
 // Turns the buyer's cart into order items + totals, or explains why it can't be ordered.
 // Used by PayPal checkout (paymentController.js). Returns { cart, items, totals } or { error }.
@@ -57,7 +58,12 @@ async function listOrders(req, res) {
   const orders = await Order.find({ user: req.user.id })
     .select("-releases.receiver -releases.error -releases.senderBatchId -releases.payoutBatchId")
     .sort({ createdAt: -1 });
-  res.json(orders);
+  // nextReviewItem: the first item still waiting for a review ("Write a review"), or null.
+  const reviews = await reviewStateFor(orders, req.user.id);
+  res.json(orders.map((order) => {
+    const next = reviews.get(String(order._id)).findIndex((item) => item.canReview);
+    return { ...order.toObject(), nextReviewItem: next >= 0 ? next : null };
+  }));
 }
 
 // ── Order detail, milestones and video delivery ──
@@ -119,6 +125,7 @@ async function orderDetail({ order, artisanId, isBuyer, isArtisan }) {
   const step = stepOf(order.status);
   const missingVideos = order.items.filter((i) => needsVideo(i) && !i.deliveryVideoUrl).length;
   const artisanNext = isArtisan ? ARTISAN_NEXT[order.status] || null : null;
+  const reviews = isBuyer ? (await reviewStateFor([order], order.user)).get(String(order._id)) : null;
 
   return {
     id: order._id,
@@ -145,6 +152,8 @@ async function orderDetail({ order, artisanId, isBuyer, isArtisan }) {
         patronBonus: item.tier === "patron" ? { mn: item.patronBonus?.mn || "", en: item.patronBonus?.en || "" } : null,
         needsVideo: needsVideo(item),
         deliveryVideoUrl: item.deliveryVideoUrl || "",
+        // The buyer's own review state; the artisan reads reviews on the product page like anyone.
+        ...(reviews && { reviewState: reviews[index] }),
       };
     }),
     subtotal: order.subtotal,

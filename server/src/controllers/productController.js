@@ -302,5 +302,5 @@ async function recordView(req, res) {
 
 module.exports = {
   listProducts, getProduct, createProduct, updateProduct, deleteProduct,
-  likeProduct, unlikeProduct, listMyLikes, recordView,
+  likeProduct, unlikeProduct, listMyLikes, recordView, visibleTo,
 };

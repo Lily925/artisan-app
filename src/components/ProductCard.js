@@ -3,10 +3,11 @@ import { COLORS, FONT_SERIF, FONT_SANS } from "../theme";
 import { artisanInfo } from "../artisanInfo";
 import { productPath } from "../paths";
 import ProductImage from "./ProductImage";
+import { RatingBadge } from "./StarRating";
 
 export default function ProductCard({
   product, nameMn, nameEn, lang, isSaved, onToggleSave, price,
-  certifiedLabel, wishlistAddLabel, wishlistRemoveLabel, isOwn = false,
+  certifiedLabel, wishlistAddLabel, wishlistRemoveLabel, ratingAria, isOwn = false,
 }) {
   const primaryName = lang === "mn" ? nameMn : nameEn;
   const secondaryName = lang === "mn" ? nameEn : nameMn;
@@ -40,6 +41,7 @@ export default function ProductCard({
           <span style={{ fontFamily:FONT_SANS, fontSize:12, color:COLORS.inkSoft, fontStyle:"italic" }}>{secondaryName}</span>
         )}
         <span style={{ fontFamily:FONT_SANS, fontSize:12, color:COLORS.inkSoft, marginTop:4 }}>{artisanName}</span>
+        <RatingBadge avg={product.ratingAvg} count={product.ratingCount} aria={ratingAria} />
         <span style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginTop:8 }}>
           <span style={{ fontFamily:FONT_SANS, fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:0.5, color:COLORS.accentDark, background:COLORS.accentSoft, padding:"3px 8px", borderRadius:2 }}>
             Basic

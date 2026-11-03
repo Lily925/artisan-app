@@ -60,4 +60,9 @@ const chatSends = rateLimit({ windowMs: MIN, max: 20, key: (req) => req.user && 
 const chatStarts = rateLimit({ windowMs: MIN, max: 60, key: (req) => req.user && `user:${req.user.id}` });
 const chatReads = rateLimit({ windowMs: MIN, max: 120, key: (req) => req.user && `user:${req.user.id}` });
 
-module.exports = { rateLimit, loginByIp, loginByAccount, signupByIp, passwordChange, checkoutCreate, checkoutCapture, notificationReads, notificationWrites, chatSends, chatStarts, chatReads };
+// Reviews, per user. Creating is capped harder: each one notifies the artisan and can store photos.
+const reviewCreate = rateLimit({ windowMs: 10 * MIN, max: 10, key: (req) => req.user && `user:${req.user.id}`,
+  message: "You're writing reviews too quickly. Please wait a few minutes." });
+const reviewWrites = rateLimit({ windowMs: MIN, max: 30, key: (req) => req.user && `user:${req.user.id}` });
+
+module.exports = { rateLimit, loginByIp, loginByAccount, signupByIp, passwordChange, checkoutCreate, checkoutCapture, notificationReads, notificationWrites, chatSends, chatStarts, chatReads, reviewCreate, reviewWrites };

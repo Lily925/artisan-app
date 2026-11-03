@@ -26,12 +26,15 @@ import ProductCard from "./components/ProductCard";
 import { isOwnProduct } from "./artisanInfo";
 import { useNotifications } from "./useNotifications";
 import { parseLink } from "./notificationHelpers";
-import { PAGE_PATHS, artisanAboutPath, categoryPath, chatPath, editProductPath, orderPath, productPath, shopPath } from "./paths";
+import { PAGE_PATHS, artisanAboutPath, categoryPath, chatPath, editProductPath, orderPath, productPath, reviewPath, shopPath } from "./paths";
 import { NotAllowed, NotFound, PageLoading, PageTitle, RequireAuth, RequireRole, ScrollToTop } from "./components/Routing";
 import ProductRoute from "./components/ProductRoute";
 import ShopRoute from "./components/ShopRoute";
 import OrdersPage from "./components/OrdersPage";
 import NotificationsPage from "./components/NotificationsPage";
+import ProductReviews from "./components/ProductReviews";
+import ReviewForm from "./components/ReviewForm";
+import AdminReviews from "./components/AdminReviews";
 
 // One switcher sets both: the UI language and the display currency that goes with it.
 // Money is always USD on the server; other currencies are a display-only conversion.
@@ -282,6 +285,15 @@ const CSS = `
   .shop-tab-inactive{border-bottom:2.5px solid transparent;background:#faf9f7;}
 `;
 
+// /orders/:orderId/review/:itemIndex. Saving replaces the form, so Back doesn't reopen it.
+function ReviewFormRoute({ onSaved, goBack, routerNavigate, ...props }) {
+  const { orderId } = useParams();
+  return (
+    <ReviewForm {...props} onBack={() => goBack(orderPath(orderId))}
+      onDone={(message) => { onSaved(message); routerNavigate(orderPath(orderId), { replace: true }); }} />
+  );
+}
+
 // /messages and /messages/:conversationId: the URL says which chat is open.
 function MessagesRoute(props) {
   const { conversationId } = useParams();
@@ -510,6 +522,7 @@ function ArtisanApp() {
   const onPaid = (orderId) =>
     Promise.all([refreshCart(), refreshOrders()]).then(() => { showToast(t.paypal.paid); routerNavigate(orderPath(orderId), { replace: true }); });
   const openOrder = (id) => routerNavigate(orderPath(id));
+  const openReview = (orderId, itemIndex) => routerNavigate(reviewPath(orderId, itemIndex));
   // A notification's in-app link. Anything unknown stays on the current page.
   const openLink = (link) => {
     const path = parseLink(link);
@@ -705,6 +718,7 @@ function ArtisanApp() {
                   onEdit={() => routerNavigate(editProductPath(selected.id))}
                   onDelete={deleteOwnProduct}
                 />
+                <ProductReviews key={`reviews-${selected.id}`} t={t} lang={lang} productId={selected.id} viewerId={currentUser?.id} onEdit={openReview} onApiError={handleApiError} showToast={showToast} />
               </>
             )}
           </ProductRoute>
@@ -714,13 +728,20 @@ function ArtisanApp() {
         <Route path={PAGE_PATHS.cart} element={signedIn(t.cart, cart ? cartPage(false) : <PageLoading />)} />
         <Route path={PAGE_PATHS.checkout} element={signedIn(t.routing.checkoutTitle, cart ? cartPage(true) : <PageLoading />)} />
         <Route path={PAGE_PATHS.orders} element={signedIn(t.orders.historyTitle,
-          <OrdersPage t={t} orders={orders} loaded={ordersLoaded} fmtAmt={fmtAmt} openOrder={openOrder} />
+          <OrdersPage t={t} orders={orders} loaded={ordersLoaded} fmtAmt={fmtAmt} openOrder={openOrder} onReview={openReview} />
         )} />
         <Route path="/orders/:orderId" element={signedIn(t.orders.title,
           <OrderRoute
             t={t} lang={lang} fmtAmt={fmtAmt}
             onBack={() => goBack(PAGE_PATHS.orders)} onApiError={handleApiError} showToast={showToast}
-            onChanged={refreshOrders} startChat={startChat}
+            onChanged={refreshOrders} startChat={startChat} onReview={openReview}
+          />
+        )} />
+        <Route path="/orders/:orderId/review/:itemIndex" element={signedIn(t.reviews.formTitle,
+          <ReviewFormRoute
+            t={t} lang={lang} onApiError={handleApiError}
+            goBack={goBack} routerNavigate={routerNavigate}
+            onSaved={(message) => { showToast(message); refreshProducts(); refreshOrders(); }}
           />
         )} />
         <Route path={PAGE_PATHS.notifications} element={signedIn(t.notifications.title,
@@ -747,7 +768,7 @@ function ArtisanApp() {
                     <ProductCard
                       key={p.id} product={p} nameMn={p.title} nameEn={p.titleEn} lang={lang}
                       isOwn={isOwnProduct(p, currentUser?.id)} isSaved onToggleSave={toggleSave} price={fmtBasic(p)}
-                      certifiedLabel={t.homePage.certified} wishlistAddLabel={t.homePage.wishlistAdd} wishlistRemoveLabel={t.homePage.wishlistRemove}
+                      certifiedLabel={t.homePage.certified} wishlistAddLabel={t.homePage.wishlistAdd} wishlistRemoveLabel={t.homePage.wishlistRemove} ratingAria={t.reviews.ratingAria}
                     />
                   ))}
                 </div>
@@ -761,7 +782,7 @@ function ArtisanApp() {
             products={products} savedItems={savedItems} toggleSave={toggleSave}
             fmtBasic={fmtBasic} fmtAmt={fmtAmt} cartLines={cart?.items?.length || 0}
             orders={orders} openOrder={openOrder} navigate={navigate} logout={logout} shopSetupNeeded={shopSetupNeeded} shopLive={shopLive}
-            onApiError={handleApiError} unreadMessages={notifications.unreadMessages} onOpenInbox={openInbox}
+            onApiError={handleApiError} unreadMessages={notifications.unreadMessages} onOpenInbox={openInbox} onReview={openReview}
             onUpdated={(user) => { updateCurrentUser(user); if (currentUser.role === "artisan") refreshProducts(); }}
           />
         )} />
@@ -829,6 +850,9 @@ function ArtisanApp() {
         )} />
         <Route path={PAGE_PATHS["admin-shops"]} element={forRoles(["admin"], t.adminShops.title,
           <AdminShops key={pageKey} t={t} lang={lang} onApiError={handleApiError} showToast={showToast} />
+        )} />
+        <Route path={PAGE_PATHS["admin-reviews"]} element={forRoles(["admin"], t.reviews.admin.title,
+          <AdminReviews key={pageKey} t={t} lang={lang} onApiError={handleApiError} showToast={showToast} />
         )} />
 
         <Route path="*" element={<NotFound t={t} />} />

@@ -21,6 +21,7 @@ export const PAGE_PATHS = {
   "add-product": "/dashboard/products/new",
   "shop-setup": "/shop-setup",
   "admin-shops": "/admin/shops",
+  "admin-reviews": "/admin/reviews",
   login: "/signin",
   signup: "/signup",
 };
@@ -28,6 +29,7 @@ export const PAGE_PATHS = {
 export const productPath = (id) => `/product/${encodeURIComponent(id)}`;
 export const editProductPath = (id) => `${productPath(id)}/edit`;
 export const orderPath = (id) => `/orders/${encodeURIComponent(id)}`;
+export const reviewPath = (orderId, itemIndex) => `${orderPath(orderId)}/review/${itemIndex}`;
 export const chatPath = (id) => `/messages/${encodeURIComponent(id)}`;
 export const categoryPath = (name) => (name ? `/category/${encodeURIComponent(name)}` : PAGE_PATHS.shop);
 // Shops from before slugs existed have none; the API finds a shop by id as well.

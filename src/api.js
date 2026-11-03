@@ -147,6 +147,19 @@ export const api = {
   acceptBid: (id, bidId) =>
     request(`/commissions/${id}/accept-bid`, { method: "PUT", auth: true, body: { bidId } }),
 
+  // Reviews. Reading is public: { summary, reviews, page, pages }.
+  getProductReviews: (productId, page = 1) => request(`/products/${encodeURIComponent(productId)}/reviews?page=${page}`, { auth: true }),
+  // FormData: orderId, itemIndex, rating, comment, "photos" (up to 3 files).
+  createReview: (formData) => request("/reviews", { method: "POST", auth: true, formData }),
+  // FormData: rating, comment, keepPhotos (JSON list), new "photos".
+  updateReview: (id, formData) => request(`/reviews/${id}`, { method: "PUT", auth: true, formData }),
+  deleteReview: (id) => request(`/reviews/${id}`, { method: "DELETE", auth: true }),
+  replyToReview: (id, text) => request(`/reviews/${id}/reply`, { method: "POST", auth: true, body: { text } }),
+  // Admin only.
+  getAdminReviews: (status, page = 1) => request(`/admin/reviews?page=${page}${status ? `&status=${status}` : ""}`, { auth: true }),
+  hideReview: (id, reason) => request(`/admin/reviews/${id}/hide`, { method: "PUT", auth: true, body: { reason } }),
+  unhideReview: (id) => request(`/admin/reviews/${id}/unhide`, { method: "PUT", auth: true }),
+
   // Own notifications only: { items (latest 30), unreadCount }.
   getNotifications: () => request("/notifications", { auth: true }),
   markNotificationRead: (id) => request(`/notifications/${id}/read`, { method: "POST", auth: true }),

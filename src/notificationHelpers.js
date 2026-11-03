@@ -33,7 +33,9 @@ export function parseLink(link) {
   const order = new RegExp(`^/orders/${ID}$`).exec(link);
   if (order) return orderPath(order[1]);
   const product = new RegExp(`^/products/${ID}$`).exec(link);
-  return product ? productPath(product[1]) : null;
+  if (product) return productPath(product[1]);
+  // Review notifications open the product page at its reviews.
+  return new RegExp(`^/product/${ID}#reviews$`).test(link) ? link : null;
 }
 
 export const badgeText = (count) => (count > 9 ? "9+" : String(count));
