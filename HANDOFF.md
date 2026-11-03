@@ -90,7 +90,7 @@
 
 ## Frontend pages
 
-Navigation is done in code (`navigate("…")`, see `src/App.js`); **there's no React Router and no page addresses in the URL.**
+Every page has its own URL (React Router 6, `BrowserRouter`). All addresses are in `src/paths.js`; components call `navigate("cart")` by page name or use its helpers (`productPath`, `shopPath`, …). See "URL routing" below.
 
 - **Layout (responsive, 2026-10-15):** every page uses the one shared container from `src/theme.js` (`THEME_CSS`): `.a-page` = width 100%, max 1280px, centered, 24px sides (16px at ≤ 640px), 40/64px top/bottom. The header (`Nav.js`), footer and home sections use `.a-container` (same width and sides, no vertical padding). Form pages (add/edit product, shop profile) add `.a-page-form` (max 680px of content, centered); login/register is a centered 560px card in the same container. Product lists use `.a-product-grid` (`auto-fill, minmax(220px, 1fr)`: 5 columns at 1440px, 4 at 1024px, 3 at 768px, 1 at 375px); commission request lists use `.a-card-grid` (2 columns ≥ ~900px, else 1). `.a-readable` caps long text at 72ch. All pages use the pink background; the old narrow 430px "phone column" (saved + profile) and the orange login style are gone.
 - **Profile layout:** `.a-profile-layout`: ≥ 1024px two columns, left 340px sticky (`.a-profile-side`, scrolls on its own if taller than the screen) with the profile card, action buttons and Logout; right: stats, then (artisans) My products and Recent shop orders (last 5, "View all" → Shop orders), then Order history and Liked items. Below 1024px it's one column in the same order.
@@ -99,7 +99,7 @@ Navigation is done in code (`navigate("…")`, see `src/App.js`); **there's no R
 
 - **Shopping:** home, shop, product detail (owners see a "Your product · Edit · Delete" bar), cart, commission (reverse auction).
   - **Commission pages:** `commission` (request form; links to My requests, and to Commission requests for artisans), `my-commissions` (`MyCommissions.js`: every user's own requests, bids sorted accepted-first then cheapest, inline "Accept → Yes, accept" confirm, Instagram link to the chosen artisan), `commission-board` (`CommissionBoard.js`: artisans and admins; category chips; per-request bid form; admins see a "only artisans with a shop can bid" note). Reached from the profile page buttons ("My requests" for everyone, "Commission requests" for artisans).
-  - **Category filter:** the chips on home and shop use the real product categories (`productCategories` in `data.js`). Picking one calls `GET /api/products?category=`; the shop has an "All" chip to clear it. The selected category stays set until changed (`shopCategory` in `App.js`).
+  - **Category filter:** the chips on home and shop use the real product categories (`productCategories` in `data.js`). Picking one calls `GET /api/products?category=`; the shop has an "All" chip to clear it. The selected category is in the address (`/category/:name`).
   - **Certified badge:** shown on product cards, product detail, storefront and the commission page only when `artisan.certified` is true.
   - **Commission page "Matched artisans":** loaded live from `GET /api/artisans?category=` and updates when the category dropdown changes.
 - **Artisan pages:**
@@ -112,7 +112,7 @@ Navigation is done in code (`navigate("…")`, see `src/App.js`); **there's no R
     - **Closing:** "Follow on Instagram", "Browse all products" (scrolls to the grid), "‹ Back to the marketplace" (shop). Hidden when there are no products (the empty state has its own).
     - Images: the first 4 product cards (the first row on desktop) load eagerly, the rest `loading="lazy"`; all `decoding="async"`. Smooth scrolling respects `prefers-reduced-motion`. Labels in `t.portfolio` (MN/EN/KO).
   - **Product detail:** the small avatar next to the shop/artisan name is the owner's profile photo (falls back to the shop photo, then the initial).
-  - "Back" retraces your steps between these two pages (`backStack` in `App.js`).
+  - "Back" is the browser's history; from a shared link with nothing behind it, it goes to `/shops`.
 - **Artisan self-service:** shop-settings (profile form, `ArtisanProfileForm.js`), add-product and edit-product (one form for both, `AddProductForm.js`; prices can be typed in ₮ or $ and are converted at the live rate).
 - **Dashboard** (`Dashboard.js`, artisans only, opened from the "Dashboard" button on the profile page): PayPal/privacy note, stat tiles (revenue in the display currency, plus the exact USD in MN/KO), buyers and status counts, a dashed **"Demo data" banner** above the stat tiles when any demo orders/views are included (e.g. "25 of 30 orders and 827 of 827 views…") with **DEMO** tags on the chart and product-table headings, a 30-day column chart with a Sales/Views toggle, hover tooltips and a "Show as table" view, and a per-product table.
 - **Orders:** the profile's Order history rows open `order-detail` (`OrderDetail.js`: milestone timeline with dates, items, Patron bonus ("Include in the package:" for the artisan), video link form for the artisan, "Your video from <shop>" + Confirm received for the buyer, inline "can't be undone" confirmations). Artisans also get a **Shop orders** button on the profile (`ShopOrders.js`, flags orders with missing videos). Tier text and the bonus helper live in `src/tiers.js`.
@@ -170,7 +170,19 @@ An artisan has no heart on their own products and the server refuses it (403 `OW
 
 ## Public browsing (2026-11-02)
 
-Logged-out visitors see home, shop, product pages and shop pages (`PUBLIC_PAGES` in `App.js`), with a Login button and no bell or Messages. Any other page, adding to the cart and liking open the login page; Back returns to where they were, and signing in goes on to the page they wanted. "Sign in to message" replaces "Message shop" on shop and product pages (`MessageShopButton.js`). The server already allowed these reads; account data still needs a login. As before, refreshing goes to home.
+Logged-out visitors see home, shop, product pages and shop pages, with a Login button and no bell or Messages. Any other page (`RequireAuth`), adding to the cart and liking open the login page; Back returns to where they were, and signing in goes on to the page they wanted. "Sign in to message" replaces "Message shop" on shop and product pages (`MessageShopButton.js`). The server already allowed these reads; account data still needs a login.
+
+## URL routing (2026-11-03)
+
+- **Public:** `/`, `/shops` (the product list), `/category/:name`, `/shop/:slug`, `/shop/:slug/about`, `/product/:id`, `/signin`, `/signup`. Search is `?q=` on the two list pages.
+- **Signed in:** `/cart`, `/checkout`, `/orders`, `/orders/:id`, `/favorites`, `/notifications`, `/profile`, `/commission`, `/my-commissions`.
+- **By role:** `/messages` and `/messages/:id` (buyer, artisan), `/commission-board` (artisan, admin), `/dashboard`, `/dashboard/orders`, `/dashboard/settings`, `/dashboard/products/new`, `/product/:id/edit` (owner only), `/shop-setup` (artisan), `/admin/shops` (admin).
+- **Guards** (`components/Routing.js`) only explain the page; the server still checks every request. Logged out goes to `/signin`; the address to return to is in the history state (`from`), never in the URL, so it can't be used to redirect anyone off the site. A wrong role sees "not allowed" at the same address. The Logout button goes home; an expired login on a protected page goes to sign-in and comes back.
+- **Loading from the address:** `ProductRoute.js` and `ShopRoute.js` fetch by id/slug. 404 or 400 from the API shows the 404 page (also for someone else's order); any other failure offers a retry. Older shops without a slug use their id; a shop's id or different capitals redirect to its slug.
+- **Checkout** is now a separate step: `/cart` edits items, then "Proceed to Checkout" opens `/checkout` (address + PayPal). Payment replaces `/checkout` in the history, so Back can't return to it.
+- **Notification links** stored by the server still say `/products/:id`; `parseLink` turns them into `/product/:id`.
+- **Hosting:** `vercel.json` already rewrites every path to `index.html`; `npm start` does the same. Social-media link previews can't show a product's name or photo, since the title is set by JavaScript after loading.
+- **React Router stays on v6:** v7 doesn't work with Create React App's Jest. The `v7_startTransition` flag is deliberately off (see `App` in `App.js`), so one "Future Flag" warning prints in the dev console and tests.
 
 ## Security (review of 2026-10-12)
 
@@ -204,7 +216,6 @@ Logged-out visitors see home, shop, product pages and shop pages (`PUBLIC_PAGES`
 - **Deferred by the owner:** comments (needs moderation/spam handling/UI design); product descriptions in Mongolian and Korean (English only for now).
 - **Waiting on the owner:** a cleaner purple necklace photo (the current one shows Instagram's arrow and dots); optionally a higher-resolution logo (the current one is 189 px).
 - **Known gaps:**
-  - No URL routing: shop and profile pages can't be linked to, and refreshing goes to home.
   - Product photos (2026-10-15): up to 5 per product. **Add/Edit product** (`AddProductForm.js` + `PhotoPicker.js`): click or drag-drop several files, thumbnails with × (remove), "Make cover", ‹ › and drag to reorder (first = cover, marked "Cover"), a `3/5` counter, and clear messages for the 5-photo limit, files over 2 MB and non-images (the server checks the real file contents too, e.g. a renamed .exe). **Product page** (`ProductGallery.js`): the big photo with ‹ › buttons (also ←/→ when focused) and a `1/5` counter, thumbnails below only when there are 2+ photos. Cards, the portfolio grid, cart, order page and dashboard show the cover only via `ProductImage.js` (alt text, lazy loading on lists, neutral picture-icon placeholder when there's no photo or it fails to load; the category emoji are no longer used for products). There is no separate "My products" page yet: editing is from the product page ("Your product · Edit").
   - Still-hardcoded marketing text in `i18n`: the "How it works" steps and escrow/shipping wording describe features (escrow, milestones) that don't exist yet.
   - All seeded artisans are `certified: true`, so the certified badge only disappears if you change it in the database.

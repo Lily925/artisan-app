@@ -85,7 +85,8 @@ export const api = {
   // Sent with the login token (if any) so an artisan also gets their own hidden products.
   getProducts: (category) =>
     request(`/products${category ? `?category=${encodeURIComponent(category)}` : ""}`, { auth: true }),
-  getProduct: (id) => request(`/products/${id}`, { auth: true }),
+  // Ids below can come straight from the address bar, so they're always encoded.
+  getProduct: (id) => request(`/products/${encodeURIComponent(id)}`, { auth: true }),
   // formData fields: title, titleEn, category, description, price (USD),
   // patronBonusMn, patronBonusEn (optional), photo (File)
   createProduct: (formData) => request("/products", { method: "POST", auth: true, formData }),
@@ -94,6 +95,8 @@ export const api = {
   deleteProduct: (id) => request(`/products/${id}`, { method: "DELETE", auth: true }),
   getArtisans: (category) =>
     request(`/artisans${category ? `?category=${encodeURIComponent(category)}` : ""}`),
+  // Public: a shop by slug or id. Unapproved shops are 404.
+  getArtisan: (slugOrId) => request(`/artisans/${encodeURIComponent(slugOrId)}`),
   getMyArtisan: () => request("/artisans/me", { auth: true }),
   updateMyArtisan: (data) => request("/artisans/me", { method: "PUT", auth: true, body: data }),
   // "Set up your shop" after an artisan signs up: { shopName, location, bio, instagramHandle }
@@ -128,7 +131,7 @@ export const api = {
     request(`/payments/paypal/orders/${encodeURIComponent(paypalOrderId)}/capture`, { method: "POST", auth: true }),
   getOrders: () => request("/orders", { auth: true }),
   // Buyer or the order's artisan only
-  getOrder: (id) => request(`/orders/${id}`, { auth: true }),
+  getOrder: (id) => request(`/orders/${encodeURIComponent(id)}`, { auth: true }),
   getShopOrders: () => request("/orders/shop", { auth: true }),
   // status: the next milestone ("in_production" / "shipped" for the artisan, "completed" for the buyer)
   advanceOrder: (id, status) => request(`/orders/${id}/status`, { method: "PUT", auth: true, body: { status } }),
@@ -155,10 +158,10 @@ export const api = {
   getConversations: () => request("/conversations", { auth: true }),
   // { conversation, card, messages (oldest first), hasMore }; before = a message id, for older ones
   getConversationMessages: (id, before) =>
-    request(`/conversations/${id}/messages${before ? `?before=${encodeURIComponent(before)}` : ""}`, { auth: true }),
+    request(`/conversations/${encodeURIComponent(id)}/messages${before ? `?before=${encodeURIComponent(before)}` : ""}`, { auth: true }),
   sendConversationMessage: (id, text) =>
-    request(`/conversations/${id}/messages`, { method: "POST", auth: true, body: { text } }),
-  markConversationRead: (id) => request(`/conversations/${id}/read`, { method: "POST", auth: true }),
+    request(`/conversations/${encodeURIComponent(id)}/messages`, { method: "POST", auth: true, body: { text } }),
+  markConversationRead: (id) => request(`/conversations/${encodeURIComponent(id)}/read`, { method: "POST", auth: true }),
   // Own shop: { savedReplies, greeting }
   getChatSettings: () => request("/artisans/me/chat-settings", { auth: true }),
   updateChatSettings: (data) => request("/artisans/me/chat-settings", { method: "PUT", auth: true, body: data }),

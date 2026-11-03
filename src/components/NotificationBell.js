@@ -4,9 +4,32 @@ import { notificationText, timeAgo } from "../notificationHelpers";
 import { BellIcon } from "./NavIcons";
 import CountBadge from "./CountBadge";
 
+// The list itself: in the bell's panel and on the /notifications page.
+export function NotificationList({ t, items, failed, fmtAmt, onFollow }) {
+  const n = t.notifications;
+  if (failed && items.length === 0) return <p role="alert" style={{ fontFamily:FONT_SANS, fontSize:13, color:COLORS.inkSoft, padding:"32px 16px", textAlign:"center" }}>{n.loadError}</p>;
+  if (items.length === 0) return <p style={{ fontFamily:FONT_SANS, fontSize:13, color:COLORS.inkSoft, padding:"32px 16px", textAlign:"center" }}>{n.empty}</p>;
+  return (
+    <ul style={{ listStyle:"none", margin:0, padding:0, overflowY:"auto", overscrollBehavior:"contain" }}>
+      {items.map((item) => (
+        <li key={item.id}>
+          <button type="button" className={`a-notif-item${item.readAt ? "" : " unread"}`} onClick={() => onFollow(item)}>
+            <span aria-hidden="true" className="a-notif-dot" style={{ visibility: item.readAt ? "hidden" : "visible" }} />
+            <span style={{ minWidth:0, flex:1 }}>
+              {!item.readAt && <span className="a-sr-only">{n.unread}: </span>}
+              <span style={{ display:"block", fontSize:13, lineHeight:1.45, color:COLORS.ink, fontWeight: item.readAt ? 400 : 700, overflowWrap:"anywhere" }}>{notificationText(t, item, fmtAmt)}</span>
+              <span style={{ display:"block", fontSize:11, color:COLORS.inkSoft, marginTop:3 }}>{timeAgo(item.createdAt, n)}</span>
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 // Header bell: a dropdown under the header on wide screens, a bottom sheet on phones
 // (.a-notif-panel in theme.js).
-export default function NotificationBell({ t, notifications, fmtAmt, onOpenLink }) {
+export default function NotificationBell({ t, notifications, fmtAmt, onOpenLink, onOpenAll }) {
   const n = t.notifications;
   const { items, unreadCount, failed, refresh, markRead, markAllRead } = notifications;
   const [open, setOpen] = useState(false);
@@ -54,26 +77,10 @@ export default function NotificationBell({ t, notifications, fmtAmt, onOpenLink 
                 <button type="button" className="a-shop-link" style={{ fontFamily:FONT_SANS, fontSize:12, fontWeight:700, color:COLORS.accentDark, minHeight:32 }} onClick={markAllRead}>{n.markAll}</button>
               )}
             </div>
-            {failed && items.length === 0 ? (
-              <p role="alert" style={{ fontFamily:FONT_SANS, fontSize:13, color:COLORS.inkSoft, padding:"32px 16px", textAlign:"center" }}>{n.loadError}</p>
-            ) : items.length === 0 ? (
-              <p style={{ fontFamily:FONT_SANS, fontSize:13, color:COLORS.inkSoft, padding:"32px 16px", textAlign:"center" }}>{n.empty}</p>
-            ) : (
-              <ul style={{ listStyle:"none", margin:0, padding:0, overflowY:"auto", overscrollBehavior:"contain" }}>
-                {items.map((item) => (
-                  <li key={item.id}>
-                    <button type="button" className={`a-notif-item${item.readAt ? "" : " unread"}`} onClick={() => follow(item)}>
-                      <span aria-hidden="true" className="a-notif-dot" style={{ visibility: item.readAt ? "hidden" : "visible" }} />
-                      <span style={{ minWidth:0, flex:1 }}>
-                        {!item.readAt && <span className="a-sr-only">{n.unread}: </span>}
-                        <span style={{ display:"block", fontSize:13, lineHeight:1.45, color:COLORS.ink, fontWeight: item.readAt ? 400 : 700, overflowWrap:"anywhere" }}>{notificationText(t, item, fmtAmt)}</span>
-                        <span style={{ display:"block", fontSize:11, color:COLORS.inkSoft, marginTop:3 }}>{timeAgo(item.createdAt, n)}</span>
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <NotificationList t={t} items={items} failed={failed} fmtAmt={fmtAmt} onFollow={follow} />
+            <div style={{ padding:"10px 16px", borderTop:`1px solid ${COLORS.border}`, textAlign:"center" }}>
+              <button type="button" className="a-shop-link" style={{ fontFamily:FONT_SANS, fontSize:12, fontWeight:700, color:COLORS.accentDark, minHeight:32 }} onClick={() => { setOpen(false); onOpenAll(); }}>{t.routing.seeAllNotifications}</button>
+            </div>
           </div>
         </>
       )}

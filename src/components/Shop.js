@@ -4,7 +4,7 @@ import ProductCard from "./ProductCard";
 import { isOwnProduct } from "../artisanInfo";
 import Footer from "./Footer";
 
-export default function Shop({ currentUserId, lang, t, filtered, loading, category, searchQuery, clearSearch, openShop, savedItems, toggleSave, openProduct, fmt, navigate }) {
+export default function Shop({ currentUserId, lang, t, filtered, loading, category, searchQuery, clearSearch, openShop, savedItems, toggleSave, fmt, navigate }) {
   const shop = t.shopPage;
   const home = t.homePage;
   const chips = [{ key: "", label: shop.allCategories }, ...t.productCategories];
@@ -67,7 +67,6 @@ export default function Shop({ currentUserId, lang, t, filtered, loading, catego
                 isSaved={savedItems.includes(p.id)}
                 isOwn={isOwnProduct(p, currentUserId)}
                 onToggleSave={toggleSave}
-                onOpen={openProduct}
                 price={fmt(p)}
                 certifiedLabel={home.certified}
                 wishlistAddLabel={home.wishlistAdd}
@@ -112,7 +111,7 @@ export default function Shop({ currentUserId, lang, t, filtered, loading, catego
         </nav>
       </div>
 
-      <Footer t={t} navigate={navigate} />
+      <Footer t={t} />
     </div>
   );
 }

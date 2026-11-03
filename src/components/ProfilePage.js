@@ -53,7 +53,7 @@ function Onboarding({ t, steps }) {
   );
 }
 
-function OrderRow({ first, title, sub, amount, onOpen }) {
+export function OrderRow({ first, title, sub, amount, onOpen }) {
   return (
     <li style={{ borderTop: first ? "none" : `1px solid ${COLORS.border}` }}>
       <button type="button" onClick={onOpen}
@@ -73,7 +73,7 @@ function OrderRow({ first, title, sub, amount, onOpen }) {
 // Artisans: stats, My products, recent shop orders, order history, liked items.
 // Buyers: stats, order history, liked items.
 export default function ProfilePage({
-  t, lang, user, emoji, products, savedItems, toggleSave, openProduct, fmtBasic, fmtAmt,
+  t, lang, user, emoji, products, savedItems, toggleSave, fmtBasic, fmtAmt,
   cartLines, orders, openOrder, navigate, logout, onUpdated, onApiError, shopSetupNeeded, shopLive = false, unreadMessages = 0, onOpenInbox,
 }) {
   const pp = t.profilePage;
@@ -118,7 +118,7 @@ export default function ProfilePage({
       )}
       <ProductCard
       product={p} nameMn={p.title} nameEn={p.titleEn} lang={lang}
-      isOwn={isOwnProduct(p, user.id)} isSaved={savedItems.includes(p.id)} onToggleSave={toggleSave} onOpen={openProduct} price={fmtBasic(p)}
+      isOwn={isOwnProduct(p, user.id)} isSaved={savedItems.includes(p.id)} onToggleSave={toggleSave} price={fmtBasic(p)}
       certifiedLabel={t.homePage.certified} wishlistAddLabel={t.homePage.wishlistAdd} wishlistRemoveLabel={t.homePage.wishlistRemove}
     />
     </div>
@@ -212,7 +212,7 @@ export default function ProfilePage({
               </Section>
             )}
 
-            <Section title={o.historyTitle}>
+            <Section title={o.historyTitle} action={orders.length > 0 && linkBtn(pp.viewAll, () => navigate("orders"))}>
               {orders.length === 0 ? <p style={muted}>{o.none}</p> : (
                 <ul style={{ listStyle:"none", margin:0, padding:0 }}>
                   {orders.map((order, i) => (

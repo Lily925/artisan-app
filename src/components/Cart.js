@@ -8,7 +8,8 @@ import ProductImage from "./ProductImage";
 
 const TIER_DISPLAY = { basic: "Basic", story: "Story", patron: "Patron" };
 
-export default function Cart({ lang, t, cart, onUpdateQty, onRemove, onPaid, onApiError, fmtAmt, fmtUsd, currency, navigate }) {
+// Two pages, one layout. /cart: edit the items, then go on. /checkout: address and payment.
+export default function Cart({ lang, t, cart, checkout = false, onUpdateQty, onRemove, onPaid, onApiError, fmtAmt, fmtUsd, currency, navigate }) {
   const c = t.cartPage;
   const items = cart?.items || [];
   const isEmpty = items.length === 0;
@@ -30,8 +31,11 @@ export default function Cart({ lang, t, cart, onUpdateQty, onRemove, onPaid, onA
   return (
     <div style={{ background:COLORS.bg, minHeight:"100vh" }}>
       <div className="a-page">
+        {checkout && !isEmpty && (
+          <button type="button" className="a-shop-link" style={{ fontFamily:FONT_SANS, fontSize:13, marginBottom:16 }} onClick={() => navigate("cart")}>‹ {t.routing.backToCart}</button>
+        )}
         <h1 style={{ fontFamily:FONT_SERIF, fontSize:32, fontWeight:600, color:COLORS.ink, marginBottom:32 }}>
-          {c.title}
+          {checkout ? t.routing.checkoutTitle : c.title}
         </h1>
 
         {isEmpty ? (
@@ -67,14 +71,19 @@ export default function Cart({ lang, t, cart, onUpdateQty, onRemove, onPaid, onA
                     </div>
                     {/* Quantity, price and remove stay together; on narrow screens they wrap below. */}
                     <div style={{ display:"flex", alignItems:"center", gap:16, marginLeft:"auto" }}>
+                    {checkout ? (
+                      <span style={{ fontFamily:FONT_SANS, fontSize:14, color:COLORS.inkSoft, whiteSpace:"nowrap" }}>× {item.qty}</span>
+                    ) : (
                     <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                       <button type="button" className="a-qty-btn" aria-label={`Decrease quantity of ${name}`} onClick={() => onUpdateQty(p._id, item.tier, Math.max(1, item.qty - 1))}>−</button>
                       <input className="a-qty-input" type="text" inputMode="numeric" readOnly value={item.qty} aria-label={`Quantity of ${name}`} />
                       <button type="button" className="a-qty-btn" aria-label={`Increase quantity of ${name}`} onClick={() => onUpdateQty(p._id, item.tier, item.qty + 1)}>+</button>
                     </div>
+                    )}
                     <div style={{ minWidth:80, textAlign:"right", whiteSpace:"nowrap", fontFamily:FONT_SANS, fontWeight:700, fontSize:15, color:COLORS.ink }}>
                       {fmtAmt(lineTotal(item))}
                     </div>
+                    {!checkout && (
                     <button
                       type="button"
                       className="a-icon-btn"
@@ -83,6 +92,7 @@ export default function Cart({ lang, t, cart, onUpdateQty, onRemove, onPaid, onA
                     >
                       <span aria-hidden="true">🗑</span>
                     </button>
+                    )}
                     </div>
                   </div>
                 );
@@ -109,9 +119,15 @@ export default function Cart({ lang, t, cart, onUpdateQty, onRemove, onPaid, onA
                   {c.chargedInUsd(fmtUsd(totalUSD))}
                 </p>
               )}
-              <ShippingAddressForm text={t.shipping} value={address} errors={addressErrors}
-                onChange={(next) => { setAddress(next); if (Object.keys(addressErrors).length) setAddressErrors(validateAddress(next, t.shipping)); }} />
-              <PayPalCheckout t={t} onPaid={onPaid} onApiError={onApiError} getShippingAddress={getShippingAddress} />
+              {checkout ? (
+                <>
+                  <ShippingAddressForm text={t.shipping} value={address} errors={addressErrors}
+                    onChange={(next) => { setAddress(next); if (Object.keys(addressErrors).length) setAddressErrors(validateAddress(next, t.shipping)); }} />
+                  <PayPalCheckout t={t} onPaid={onPaid} onApiError={onApiError} getShippingAddress={getShippingAddress} />
+                </>
+              ) : (
+                <button type="button" className="a-btn-primary" style={{ width:"100%", marginBottom:16 }} onClick={() => navigate("checkout")}>{t.checkout}</button>
+              )}
               <div style={{ display:"flex", gap:8, fontFamily:FONT_SANS, fontSize:11, color:COLORS.inkSoft, lineHeight:1.5 }}>
                 <span aria-hidden="true">🔒</span>
                 <span>{c.escrowNote}</span>

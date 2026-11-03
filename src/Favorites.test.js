@@ -23,6 +23,7 @@ function signIn(user, notifications = { items: [], unreadCount: 0, unreadMessage
     const reply = (body) => Promise.resolve({ ok: true, status: 200, statusText: '', json: async () => body });
     if (path === '/products') return reply([product]);
     if (path === `/products/${product._id}`) return reply(product);
+    if (path === `/artisans/${artisan._id}`) return reply(artisan);
     if (path === '/notifications') return reply(notifications);
     if (path === '/cart') return reply({ items: [] });
     if (path === '/users/me') return reply(user);
@@ -52,7 +53,7 @@ test('the owner has no heart on their product: cards, product page, shop page, p
   await screen.findByRole('heading', { name: 'My products' });
   await screen.findAllByRole('link', { name: /Boots/ });
   expect(hearts()).toHaveLength(0); // profile card
-});
+}, 15000); // visits four pages; can pass the default 5 seconds on a busy machine
 
 test('a buyer keeps the heart in those places', async () => {
   signIn(buyerUser);

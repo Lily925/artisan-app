@@ -7,6 +7,7 @@ import InstagramIcon from "./InstagramIcon";
 import Footer from "./Footer";
 import ProductImage from "./ProductImage";
 import MessageShopButton, { messageShopMode } from "./MessageShopButton";
+import CopyLinkButton from "./CopyLinkButton";
 
 // Filter + sort only pay off once there's a real list to look through.
 const FILTER_SORT_MIN = 7;
@@ -148,6 +149,7 @@ export default function Portfolio({ lang, t, artisan, products, savedItems, togg
             <div className="pf-row">
               <MessageShopButton t={t} viewer={viewer} isOwner={isOwner} onMessage={onMessageShop} onSignIn={onSignIn} />
               {igButton(pf.instagram, !messageShopMode(viewer, isOwner))}
+              <CopyLinkButton t={t} />
               <span className="pf-stat">{pf.statProducts(products.length)}</span>
               <span className="pf-stat">♡ {pf.statLikes(likes)}</span>
             </div>
@@ -259,7 +261,7 @@ export default function Portfolio({ lang, t, artisan, products, savedItems, togg
       </section>
       )}
 
-      <Footer t={t} navigate={navigate} />
+      <Footer t={t} />
     </div>
   );
 }

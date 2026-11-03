@@ -3,6 +3,7 @@ import { COLORS, FONT_SERIF, FONT_SANS } from "../theme";
 import { api } from "../api";
 import { bonusText } from "../tiers";
 import ProductImage from "./ProductImage";
+import { NotFound } from "./Routing";
 
 const fmtDate = (d) => new Date(d).toLocaleDateString([], { dateStyle: "medium" });
 
@@ -186,6 +187,7 @@ export default function OrderDetail({ t, lang, orderId, fmtAmt, onBack, onApiErr
   const o = t.orders;
   const [order, setOrder] = useState(null);
   const [failed, setFailed] = useState(false);
+  const [missing, setMissing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [stepError, setStepError] = useState("");
 
@@ -193,7 +195,13 @@ export default function OrderDetail({ t, lang, orderId, fmtAmt, onBack, onApiErr
     let stale = false;
     api.getOrder(orderId)
       .then((res) => { if (!stale) setOrder(res); })
-      .catch((err) => { if (stale) return; if (err.status === 401) onApiError(err); setFailed(true); });
+      .catch((err) => {
+        if (stale) return;
+        if (err.status === 401) onApiError(err);
+        // Someone else's order is a 404 as well, so it reads the same as one that doesn't exist.
+        if (err.status === 404 || err.status === 400) setMissing(true);
+        else setFailed(true);
+      });
     return () => { stale = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderId]);
@@ -219,6 +227,7 @@ export default function OrderDetail({ t, lang, orderId, fmtAmt, onBack, onApiErr
       </div>
     </div>
   );
+  if (missing) return <NotFound t={t} />;
   if (failed) return page(<p style={{ fontFamily:FONT_SANS, fontSize:14, color:COLORS.inkSoft }}>{o.loadError}</p>);
   if (!order) return page(<p style={{ fontFamily:FONT_SANS, fontSize:14, color:COLORS.inkSoft }}>…</p>);
 

@@ -2,7 +2,7 @@ import { COLORS, FONT_SERIF, FONT_SANS } from "../theme";
 import ProductCard from "./ProductCard";
 import { isOwnProduct } from "../artisanInfo";
 
-export default function Home({ lang, t, prods, savedItems, toggleSave, openProduct, fmt, navigate, openShop, currentUserId }) {
+export default function Home({ lang, t, prods, savedItems, toggleSave, fmt, navigate, openShop, currentUserId }) {
   const home = t.homePage;
 
   return (
@@ -51,7 +51,6 @@ export default function Home({ lang, t, prods, savedItems, toggleSave, openProdu
                 isSaved={savedItems.includes(p.id)}
                 isOwn={isOwnProduct(p, currentUserId)}
                 onToggleSave={toggleSave}
-                onOpen={openProduct}
                 price={fmt(p)}
                 certifiedLabel={home.certified}
                 wishlistAddLabel={home.wishlistAdd}
