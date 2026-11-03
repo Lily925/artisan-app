@@ -68,10 +68,15 @@ try {
   const product = await mkProduct(shop, "Boots");
   const second = await mkProduct(shop, "Hat");
   const otherProduct = await mkProduct(otherShop, "Bag");
-  const mkOrder = (who, status, products = [product], artisan = shop) => Order.create({
+  // Paid through PayPal by default, and Completed just now if it's completed.
+  const PAID = () => ({ provider: "paypal", captureId: "CAPTURE-1", amount: 23.5, currency: "USD", capturedAt: new Date() });
+  const daysAgo = (days) => new Date(Date.now() - days * 86400000);
+  const mkOrder = (who, status, products = [product], artisan = shop, over = {}) => Order.create({
+    payment: PAID(), statusHistory: status === "completed" ? [{ status: "completed", at: new Date() }] : [],
     user: who.user._id, status, subtotal: 10, commissionFee: 1.5, shipping: 12, total: 23.5,
     items: products.map((p) => ({ product: p._id, artisan: artisan._id, title: p.title, tier: "basic", unitPrice: 10, qty: 1 })),
     shippingAddress: { name: "Secret Recipient", address: SECRET_STREET, city: "UB", country: "MN", phone: SECRET_PHONE },
+    ...over,
   });
   const write = (who, order, fields = {}, files = [], itemIndex = 0) => send("/reviews", { method: "POST", token: who.token, form: formOf({ orderId: order._id, itemIndex, rating: 5, ...fields }, files) });
   const edit = (who, id, fields = {}, files = []) => send(`/reviews/${id}`, { method: "PUT", token: who.token, form: formOf({ rating: 4, ...fields }, files) });
@@ -262,10 +267,6 @@ try {
   check("…its photo is gone", !(await exists(toDelete.photos[0])));
   check("…it left the average", same(await rating(Product, second), [3, 1]), JSON.stringify(await rating(Product, second)));
   check("…and the list", !(await publicList(second)).body.reviews.some((x) => x.id === toDelete.id));
-  r = await write(buyer3, toDeleteOrder);
-  check("…and the item can't be reviewed again (one per order item)", r.status === 409 && r.body.code === "ALREADY_REVIEWED", `${r.status} ${r.body.code}`);
-  r = await send(`/orders/${toDeleteOrder._id}`, { token: buyer3.token });
-  check('…the order page says "deleted"', r.body.items[0].reviewState.block === "DELETED");
   check("…a second delete → 404", (await send(`/reviews/${toDelete.id}`, { method: "DELETE", token: buyer3.token })).status === 404);
 
   // ── artisan reply ──
@@ -371,6 +372,175 @@ try {
   r = await publicList(pageProduct, {}, "?page=abc");
   check("a bad page number → page 1", r.status === 200 && r.body.page === 1);
   check("a bad product id → 404", (await send("/products/nonsense/reviews")).status === 404);
+
+  // ── only orders paid through PayPal ──
+  const pay = await account("pay");
+  const unpaidOrders = [
+    ["no payment at all", { payment: undefined }],
+    ["a payment that was never captured", { payment: { provider: "paypal", paypalOrderId: "X" } }],
+    ["another provider", { payment: { provider: "manual", capturedAt: new Date() } }],
+  ];
+  for (const [what, over] of unpaidOrders) {
+    const order = await mkOrder(pay, "completed", [product], shop, over);
+    r = await write(pay, order);
+    check(`can't review a Completed order with ${what} → 409 ORDER_NOT_PAID`, r.status === 409 && r.body.code === "ORDER_NOT_PAID", `${r.status} ${r.body.code}`);
+    r = await send(`/orders/${order._id}`, { token: pay.token });
+    check("…the order page says why", r.body.items[0].reviewState.block === "NOT_PAID" && r.body.items[0].reviewState.canReview === false);
+  }
+  r = await send("/orders", { token: pay.token });
+  check('…and the order list has no "Write a review"', r.body.every((o) => o.nextReviewItem === null));
+  check("…no review was stored", (await Review.countDocuments({ buyer: pay.user._id })) === 0);
+
+  // ── 60 days after Completed ──
+  const late = await account("late");
+  const completedDaysAgo = (who, days, p = product) => mkOrder(who, "completed", [p], shop, { statusHistory: [{ status: "paid", at: daysAgo(days + 5) }, { status: "completed", at: daysAgo(days) }] });
+  const tooLate = await completedDaysAgo(late, 60.1);
+  r = await write(late, tooLate);
+  check("past 60 days after Completed → 409 REVIEW_WINDOW_CLOSED", r.status === 409 && r.body.code === "REVIEW_WINDOW_CLOSED", `${r.status} ${r.body.code}`);
+  r = await send(`/orders/${tooLate._id}`, { token: late.token });
+  check("…the order page says why", r.body.items[0].reviewState.block === "WINDOW_CLOSED");
+  r = await send("/orders", { token: late.token });
+  check('…and the order list has no "Write a review"', r.body.find((o) => o._id === String(tooLate._id)).nextReviewItem === null);
+  const noDate = await mkOrder(late, "completed", [product], shop, { statusHistory: [] });
+  r = await write(late, noDate);
+  check("no recorded Completed date → refused", r.status === 409 && r.body.code === "REVIEW_WINDOW_CLOSED", `${r.status} ${r.body.code}`);
+  const justInTime = await completedDaysAgo(late, 59.9);
+  r = await send("/orders", { token: late.token });
+  check('just inside 60 days: "Write a review" shows', r.body.find((o) => o._id === String(justInTime._id)).nextReviewItem === 0);
+  r = await write(late, justInTime);
+  check("…and the review is accepted", r.status === 201, r.text);
+  const oldDateFirst = await mkOrder(late, "shipped", [second], shop);
+  r = await send(`/orders/${oldDateFirst._id}/status`, { method: "PUT", token: late.token, json: { status: "completed" } });
+  check("confirming receipt records the date", r.status === 200 && r.body.status === "completed", r.text.slice(0, 120));
+  r = await write(late, oldDateFirst);
+  check("…so the real flow can be reviewed right away", r.status === 201, r.text);
+
+  // ── writing a deleted review again ──
+  const rw = await account("rw");
+  const rwProduct = await mkProduct(shop, "Rewrite");
+  const rwOrder = await mkOrder(rw, "completed", [rwProduct]);
+  r = await write(rw, rwOrder, { rating: 5, comment: "First" }, [{ data: PNG() }]);
+  const rwId = r.body.id;
+  const rwCreated = (await Review.findById(rwId)).createdAt.getTime();
+  const notesAfterFirst = await Notification.countDocuments({ user: owner.user._id, type: "review_received", "params.productId": String(rwProduct._id) });
+  check("…written and counted", same(await rating(Product, rwProduct), [5, 1]));
+  await send(`/reviews/${rwId}`, { method: "DELETE", token: rw.token });
+  check("deleted: out of the average", same(await rating(Product, rwProduct), [0, 0]));
+  r = await send(`/orders/${rwOrder._id}`, { token: rw.token });
+  check("the order page offers writing it again, until the original date", r.body.items[0].reviewState.canReview === true && new Date(r.body.items[0].reviewState.rewriteUntil).getTime() === rwCreated + 14 * 86400000);
+  r = await send("/orders", { token: rw.token });
+  check('…and so does the list ("Write a review")', r.body.find((o) => o._id === String(rwOrder._id)).nextReviewItem === 0);
+  await age(rwId, 13);
+  const agedCreated = (await Review.findById(rwId)).createdAt.getTime();
+  r = await write(rw, rwOrder, { rating: 2, comment: "Second" }, [{ data: PNG() }]);
+  check("it can be written again inside the 14 days", r.status === 201 && r.body.id === rwId && r.body.rating === 2 && r.body.comment === "Second" && r.body.photos.length === 1, r.text);
+  check("…on the same row, which doesn't restart the 14 days", (await Review.findById(rwId)).createdAt.getTime() === agedCreated);
+  check("…and counts again", same(await rating(Product, rwProduct), [2, 1]));
+  check("…with no second notification to the artisan", (await Notification.countDocuments({ user: owner.user._id, type: "review_received", "params.productId": String(rwProduct._id) })) === notesAfterFirst);
+  r = await publicList(rwProduct);
+  check('…and it says "edited"', r.body.reviews[0].edited === true && r.body.reviews[0].displayName === "Tuyarw");
+  check("still one per item: writing again now → 409", (await write(rw, rwOrder)).body.code === "ALREADY_REVIEWED");
+  await age(rwId, 14.01);
+  check("the rewrite locks when the original 14 days end", (await edit(rw, rwId, { rating: 1 })).body.code === "EDIT_WINDOW_CLOSED");
+
+  const rw2 = await account("rw2");
+  const finalOrder = await mkOrder(rw2, "completed", [rwProduct]);
+  r = await write(rw2, finalOrder, { rating: 4 });
+  const finalId = r.body.id;
+  await send(`/reviews/${finalId}`, { method: "DELETE", token: rw2.token });
+  await age(finalId, 14.01);
+  r = await write(rw2, finalOrder);
+  check("after the 14 days a deleted review is final → 409", r.status === 409 && r.body.code === "DELETED_FINAL", `${r.status} ${r.body.code}`);
+  r = await send(`/orders/${finalOrder._id}`, { token: rw2.token });
+  check('…the order page says "deleted"', r.body.items[0].reviewState.block === "DELETED" && r.body.items[0].reviewState.canReview === false);
+  r = await send("/orders", { token: rw2.token });
+  check('…and the list has no "Write a review"', r.body.find((o) => o._id === String(finalOrder._id)).nextReviewItem === null);
+  check("…no photos or text were kept", (await Review.findById(finalId)).comment === "" && (await Review.findById(finalId)).photos.length === 0);
+
+  const rw3 = await account("rw3");
+  const pastSixty = await completedDaysAgo(rw3, 59, rwProduct);
+  r = await write(rw3, pastSixty, { rating: 3 });
+  const pastSixtyId = r.body.id;
+  await send(`/reviews/${pastSixtyId}`, { method: "DELETE", token: rw3.token });
+  await Order.updateOne({ _id: pastSixty._id }, { statusHistory: [{ status: "completed", at: daysAgo(70) }] });
+  r = await write(rw3, pastSixty, { rating: 4 });
+  check("a rewrite inside its 14 days is allowed even past the 60 days", r.status === 201, r.text);
+  await send(`/reviews/${pastSixtyId}`, { method: "DELETE", token: rw3.token });
+  check("another's deleted review can't be taken over → 404", (await write(rw2, pastSixty)).status === 404);
+  await Order.updateOne({ _id: pastSixty._id }, { payment: undefined, $unset: { payment: 1 } });
+  check("a rewrite still needs a paid order", (await write(rw3, pastSixty)).body.code === "ORDER_NOT_PAID");
+
+  // ── the artisan's reply: edit or delete for 14 days ──
+  const rp = await account("rp");
+  const rpOrder = await mkOrder(rp, "completed", [rwProduct]);
+  r = await write(rp, rpOrder, { rating: 4, comment: "Nice" });
+  const rpId = r.body.id;
+  const editReply = (who, text = "Edited reply") => send(`/reviews/${rpId}/reply`, { method: "PUT", token: who.token, json: { text } });
+  const dropReply = (who) => send(`/reviews/${rpId}/reply`, { method: "DELETE", token: who.token });
+  const replyAge = async (days) => {
+    const { modifiedCount } = await Review.collection.updateOne({ _id: new mongoose.Types.ObjectId(rpId) }, { $set: { "reply.at": daysAgo(days) } });
+    if (modifiedCount !== 1) throw new Error("the reply wasn't aged");
+  };
+  const rpNotes = () => Notification.countDocuments({ user: rp.user._id, type: "review_replied" });
+  const rpShown = async (who) => (await publicList(rwProduct, who ? { token: who.token } : {})).body.reviews.find((x) => x.id === rpId);
+  check("editing a reply that doesn't exist → 404 NO_REPLY", (await editReply(owner)).body.code === "NO_REPLY");
+  check("deleting a reply that doesn't exist → 404 NO_REPLY", (await dropReply(owner)).body.code === "NO_REPLY");
+  check("…the owner isn't offered changes yet", (await rpShown(owner)).canEditReply === false);
+  r = await send(`/reviews/${rpId}/reply`, { method: "POST", token: owner.token, json: { text: "Original reply" } });
+  check("the artisan posts a reply", r.status === 201 && r.body.reply.edited === false, r.text);
+  const postedAt = r.body.reply.at;
+  check("…the buyer is notified once", (await rpNotes()) === 1);
+  check("…and the owner is offered changes", (await rpShown(owner)).canEditReply === true);
+  check("…a visitor isn't", (await rpShown()).canEditReply === false);
+  check("…nor the buyer", (await rpShown(rp)).canEditReply === false);
+  for (const [who, name] of [[rp, "the buyer"], [otherOwner, "another artisan"], [admin, "an admin"]]) {
+    r = await editReply(who);
+    check(`${name} can't edit the reply → 403`, r.status === 403 && r.body.code === "NOT_YOUR_SHOP", `${r.status}`);
+    r = await dropReply(who);
+    check(`${name} can't delete the reply → 403`, r.status === 403 && r.body.code === "NOT_YOUR_SHOP", `${r.status}`);
+  }
+  check("no login → 401", (await send(`/reviews/${rpId}/reply`, { method: "PUT", json: { text: "x" } })).status === 401);
+  check("an empty edit → 400", (await editReply(owner, "  ")).body.code === "EMPTY_REPLY");
+  check("an over-long edit → 400", (await editReply(owner, "x".repeat(1001))).body.code === "REPLY_TOO_LONG");
+  r = await editReply(owner, " Edited\u0007 reply ");
+  check("the artisan can edit it; text cleaned like chat", r.status === 200 && r.body.reply.text === "Edited reply" && r.body.reply.edited === true, r.text);
+  check("…the posting date stays", new Date(r.body.reply.at).getTime() === new Date(postedAt).getTime());
+  check("…no notification on edit", (await rpNotes()) === 1);
+  check("…it's public, marked edited", (await rpShown()).reply.text === "Edited reply" && (await rpShown()).reply.edited === true);
+  r = await send(`/reviews/${rpId}/reply`, { method: "POST", token: owner.token, json: { text: "A second reply" } });
+  check("still one reply per review → 409", r.status === 409 && r.body.code === "REPLY_EXISTS");
+  await replyAge(13.9);
+  check("still editable just inside 14 days", (await editReply(owner, "Later edit")).status === 200);
+  await replyAge(14.01);
+  r = await editReply(owner, "Too late");
+  check("locked after 14 days: edit → 403", r.status === 403 && r.body.code === "REPLY_LOCKED", `${r.status} ${r.body.code}`);
+  r = await dropReply(owner);
+  check("locked after 14 days: delete → 403", r.status === 403 && r.body.code === "REPLY_LOCKED");
+  check("…unchanged, and no longer offered", (await rpShown(owner)).reply.text === "Later edit" && (await rpShown(owner)).canEditReply === false);
+  await replyAge(1);
+  r = await dropReply(owner);
+  check("the artisan can delete it within 14 days", r.status === 200 && r.body.deleted === true, r.text);
+  check("…it's gone from the page", (await rpShown()).reply === null);
+  check("…no notification on delete", (await rpNotes()) === 1);
+  check("…one reply per review: no new one is offered", (await rpShown(owner)).canReply === false && (await rpShown(owner)).canEditReply === false);
+  r = await send(`/reviews/${rpId}/reply`, { method: "POST", token: owner.token, json: { text: "Again" } });
+  check("…and one is refused → 409 REPLY_DELETED", r.status === 409 && r.body.code === "REPLY_DELETED", `${r.status} ${r.body.code}`);
+  check("…editing it now → 404", (await editReply(owner)).status === 404);
+  check("the review itself is untouched", (await rpShown()).comment === "Nice");
+  await send(`/reviews/${rpId}`, { method: "DELETE", token: rp.token });
+  await write(rp, rpOrder, { rating: 3, comment: "New text" });
+  r = await send(`/reviews/${rpId}/reply`, { method: "POST", token: owner.token, json: { text: "To the new text" } });
+  check("a rewritten review is new content: it can get a reply", r.status === 201, r.text);
+
+  // ── hidden products ──
+  const hiddenBuyer = await account("hid");
+  const hideMe = await mkProduct(shop, "HideMe");
+  await write(hiddenBuyer, await mkOrder(hiddenBuyer, "completed", [hideMe]), { rating: 1 });
+  const shopBeforeHiding = await rating(Artisan, shop);
+  await Product.updateOne({ _id: hideMe._id }, { isHidden: true });
+  await write(hiddenBuyer, await mkOrder(hiddenBuyer, "completed", [hideMe]), { rating: 1 });
+  check("reviews of a hidden product still count in the shop's average", (await rating(Artisan, shop))[1] === shopBeforeHiding[1] + 1, JSON.stringify([shopBeforeHiding, await rating(Artisan, shop)]));
+  check("…while the reviews themselves aren't public", (await publicList(hideMe)).status === 404);
 
   // ── rate limit ──
   const limitOrder = await mkOrder(limited, "completed");

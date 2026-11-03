@@ -18,9 +18,10 @@ const CSS = `
   .rv-verified{font-family:${FONT_SANS};font-size:11px;font-weight:700;color:${COLORS.accentDark};background:${COLORS.accentSoft};padding:3px 8px;border-radius:2px;white-space:nowrap;}
 `;
 
-function ReplyForm({ t, review, onReplied, onApiError }) {
+// A new reply, or (with `existing`) changing the one already posted.
+function ReplyForm({ t, review, existing, onSaved, onCancel, onApiError }) {
   const r = t.reviews;
-  const [text, setText] = useState("");
+  const [text, setText] = useState(existing?.text || "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const id = `reply-${review.id}`;
@@ -31,8 +32,8 @@ function ReplyForm({ t, review, onReplied, onApiError }) {
     setBusy(true);
     setError("");
     try {
-      const { reply } = await api.replyToReview(review.id, text);
-      onReplied(review.id, reply);
+      const { reply } = existing ? await api.updateReply(review.id, text) : await api.replyToReview(review.id, text);
+      onSaved(review.id, reply, existing ? r.replyUpdated : r.replySaved);
     } catch (err) {
       if (err.status === 401) onApiError(err);
       else setError(r.errors[err.code] || r.errors.generic);
@@ -47,12 +48,62 @@ function ReplyForm({ t, review, onReplied, onApiError }) {
       <textarea id={id} className="a-textarea" style={{ minHeight:72 }} maxLength={REPLY_MAX} value={text} onChange={(e) => setText(e.target.value)} aria-describedby={`${id}-hint`} />
       <div id={`${id}-hint`} style={{ fontFamily:FONT_SANS, fontSize:12, color:COLORS.inkSoft, marginTop:4 }}>{r.replyHint} · {r.counter(text.length, REPLY_MAX)}</div>
       {error && <p role="alert" style={{ fontFamily:FONT_SANS, fontSize:13, color:"#B3261E", marginTop:6 }}>{error}</p>}
-      <button type="submit" className="a-btn-outline" style={{ padding:"8px 16px", fontSize:13, minHeight:40, marginTop:10 }} disabled={busy}>{busy ? r.replySending : r.replySend}</button>
+      <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginTop:10 }}>
+        <button type="submit" className="a-btn-outline" style={{ padding:"8px 16px", fontSize:13, minHeight:40 }} disabled={busy}>{busy ? r.replySending : existing ? r.replySave : r.replySend}</button>
+        {existing && <button type="button" className="a-btn-outline" style={{ padding:"8px 16px", fontSize:13, minHeight:40 }} disabled={busy} onClick={onCancel}>{r.cancel}</button>}
+      </div>
     </form>
   );
 }
 
-function ReviewCard({ t, lang, review, onEdit, onReplied, onApiError }) {
+// The artisan's reply, with Edit and Delete for its owner while they're open.
+function ReplyBlock({ t, lang, review, onReplied, onReplyDeleted, onApiError, showToast }) {
+  const r = t.reviews;
+  const [editing, setEditing] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const small = { padding:"6px 14px", fontSize:12, minHeight:36 };
+
+  const remove = async () => {
+    setBusy(true);
+    try {
+      await api.deleteReply(review.id);
+      onReplyDeleted(review.id);
+    } catch (err) {
+      if (err.status === 401) onApiError(err);
+      else showToast(r.errors[err.code] || r.errors.generic);
+      setBusy(false);
+      setConfirming(false);
+    }
+  };
+
+  if (editing) {
+    return <ReplyForm t={t} review={review} existing={review.reply} onCancel={() => setEditing(false)} onApiError={onApiError}
+      onSaved={(id, reply, message) => { setEditing(false); onReplied(id, reply, message); }} />;
+  }
+  return (
+    <div className="a-callout" style={{ marginTop:14, padding:"10px 14px" }}>
+      <div style={{ fontSize:12, fontWeight:700, color:COLORS.ink, marginBottom:4 }}>{r.replyFrom} · <span style={{ fontWeight:400, color:COLORS.inkSoft }}>{fmtReviewDate(review.reply.at, lang)}{review.reply.edited && ` · ${r.edited}`}</span></div>
+      <p style={{ fontSize:13, color:COLORS.ink, lineHeight:1.55, whiteSpace:"pre-line", overflowWrap:"anywhere", margin:0 }}>{review.reply.text}</p>
+      {review.canEditReply && (confirming ? (
+        <div role="alertdialog" aria-label={r.replyDeleteConfirm} style={{ marginTop:10 }}>
+          <p style={{ fontSize:13, fontWeight:700, color:COLORS.ink, marginBottom:8 }}>{r.replyDeleteConfirm}</p>
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+            <button type="button" className="a-btn-primary" style={{ ...small, background:"#B3261E", color:"#fff" }} disabled={busy} onClick={remove}>{busy ? r.deleting : r.deleteYes}</button>
+            <button type="button" className="a-btn-outline" style={small} disabled={busy} onClick={() => setConfirming(false)} autoFocus>{r.cancel}</button>
+          </div>
+        </div>
+      ) : (
+        <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginTop:10 }}>
+          <button type="button" className="a-btn-outline" style={small} onClick={() => setEditing(true)}>{r.replyEdit}</button>
+          <button type="button" className="a-btn-outline" style={{ ...small, color:"#B3261E", borderColor:"#B3261E" }} onClick={() => setConfirming(true)}>{r.replyDelete}</button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ReviewCard({ t, lang, review, onEdit, onReplied, onReplyDeleted, onApiError, showToast }) {
   const r = t.reviews;
   return (
     <li className="a-info-block" style={{ marginBottom:12, fontFamily:FONT_SANS }}>
@@ -75,13 +126,8 @@ function ReviewCard({ t, lang, review, onEdit, onReplied, onApiError }) {
           ))}
         </div>
       )}
-      {review.reply && (
-        <div className="a-callout" style={{ marginTop:14, padding:"10px 14px" }}>
-          <div style={{ fontSize:12, fontWeight:700, color:COLORS.ink, marginBottom:4 }}>{r.replyFrom} · <span style={{ fontWeight:400, color:COLORS.inkSoft }}>{fmtReviewDate(review.reply.at, lang)}</span></div>
-          <p style={{ fontSize:13, color:COLORS.ink, lineHeight:1.55, whiteSpace:"pre-line", overflowWrap:"anywhere", margin:0 }}>{review.reply.text}</p>
-        </div>
-      )}
-      {review.canReply && <ReplyForm t={t} review={review} onReplied={onReplied} onApiError={onApiError} />}
+      {review.reply && <ReplyBlock t={t} lang={lang} review={review} onReplied={onReplied} onReplyDeleted={onReplyDeleted} onApiError={onApiError} showToast={showToast} />}
+      {review.canReply && <ReplyForm t={t} review={review} onSaved={onReplied} onApiError={onApiError} />}
     </li>
   );
 }
@@ -115,9 +161,14 @@ export default function ProductReviews({ t, lang, productId, viewerId, onEdit, o
   }, [data, hash]);
 
   const goTo = (next) => { setPage(next); section.current?.scrollIntoView?.({ block:"start" }); };
-  const onReplied = (id, reply) => {
-    setData((d) => ({ ...d, reviews: d.reviews.map((x) => (x.id === id ? { ...x, reply, canReply: false } : x)) }));
-    showToast(r.replySaved);
+  const changeReview = (id, change) => setData((d) => ({ ...d, reviews: d.reviews.map((x) => (x.id === id ? { ...x, ...change } : x)) }));
+  const onReplied = (id, reply, message) => {
+    changeReview(id, { reply, canReply: false, canEditReply: true });
+    showToast(message);
+  };
+  const onReplyDeleted = (id) => {
+    changeReview(id, { reply: null, canReply: false, canEditReply: false });
+    showToast(r.replyDeleted);
   };
 
   const summary = data?.summary;
@@ -168,7 +219,7 @@ export default function ProductReviews({ t, lang, productId, viewerId, onEdit, o
 
           <ul style={{ listStyle:"none", margin:0, padding:0 }}>
             {reviews.map((review) => (
-              <ReviewCard key={review.id} t={t} lang={lang} review={review} onEdit={onEdit} onReplied={onReplied} onApiError={onApiError} />
+              <ReviewCard key={review.id} t={t} lang={lang} review={review} onEdit={onEdit} onReplied={onReplied} onReplyDeleted={onReplyDeleted} onApiError={onApiError} showToast={showToast} />
             ))}
           </ul>
 

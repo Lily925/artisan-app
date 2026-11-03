@@ -40,7 +40,7 @@ function StarInput({ r, value, onChange }) {
 }
 
 // The form itself, for a new review or an open one.
-function Editor({ t, lang, orderId, item, review, onDone, onApiError }) {
+function Editor({ t, lang, orderId, item, review, rewriteUntil, onDone, onApiError }) {
   const r = t.reviews;
   const [rating, setRating] = useState(review?.rating || 0);
   const [comment, setComment] = useState(review?.comment || "");
@@ -145,13 +145,13 @@ function Editor({ t, lang, orderId, item, review, onDone, onApiError }) {
       </div>
 
       <p style={{ fontFamily:FONT_SANS, fontSize:12, color:COLORS.inkSoft, lineHeight:1.5, marginBottom:16 }}>
-        {r.publicNote}{review && <> {r.editNote(fmtReviewDate(review.editableUntil, lang))}</>}
+        {r.publicNote}{review && <> {r.editNote(fmtReviewDate(review.editableUntil, lang))}</>}{rewriteUntil && <> {r.rewriteNote(fmtReviewDate(rewriteUntil, lang))}</>}
       </p>
       {error && <p role="alert" style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:600, color:"#B3261E", marginBottom:12 }}>{error}</p>}
 
       {confirming ? (
         <div role="alertdialog" aria-labelledby="review-delete-q" className="a-callout">
-          <p id="review-delete-q" style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:700, color:COLORS.ink, marginBottom:10 }}>{r.deleteConfirm}</p>
+          <p id="review-delete-q" style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:700, color:COLORS.ink, marginBottom:10 }}>{r.deleteConfirm(fmtReviewDate(review.editableUntil, lang))}</p>
           <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
             <button type="button" className="a-btn-primary" style={{ padding:"8px 16px", minHeight:40, background:"#B3261E", color:"#fff" }} disabled={busy} onClick={remove}>{busy ? r.deleting : r.deleteYes}</button>
             <button type="button" className="a-btn-outline" style={{ padding:"8px 16px", minHeight:40 }} disabled={busy} onClick={() => setConfirming(false)} autoFocus>{r.cancel}</button>
@@ -196,7 +196,7 @@ export default function ReviewForm({ t, lang, onDone, onBack, onApiError }) {
   // Only the buyer has a review state; the order's artisan can see the order but not this form.
   if (!item?.reviewState) return <NotFound t={t} />;
 
-  const { canReview, block, review } = item.reviewState;
+  const { canReview, block, review, rewriteUntil } = item.reviewState;
   const name = lang === "mn" ? item.title : item.titleEn || item.title;
   const muted = { fontFamily:FONT_SANS, fontSize:14, color:COLORS.inkSoft, lineHeight:1.6 };
   const open = canReview || review?.editable;
@@ -216,7 +216,7 @@ export default function ReviewForm({ t, lang, onDone, onBack, onApiError }) {
         </div>
 
         {open ? (
-          <Editor t={t} lang={lang} orderId={orderId} item={item} review={review} onDone={onDone} onApiError={onApiError} />
+          <Editor t={t} lang={lang} orderId={orderId} item={item} review={review} rewriteUntil={rewriteUntil} onDone={onDone} onApiError={onApiError} />
         ) : review ? (
           <div className="a-info-block" style={{ fontFamily:FONT_SANS }}>
             <span role="img" aria-label={r.starsAria(review.rating)}><Stars value={review.rating} size={18} /></span>

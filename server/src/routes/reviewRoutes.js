@@ -3,7 +3,7 @@ const asyncHandler = require("../middleware/asyncHandler");
 const { requireAuth } = require("../middleware/auth");
 const { reviewCreate, reviewWrites } = require("../middleware/rateLimit");
 const { reviewPhotoUpload } = require("../utils/imageStorage");
-const { createReview, updateReview, deleteReview, replyToReview } = require("../controllers/reviewController");
+const { createReview, updateReview, deleteReview, replyToReview, updateReply, deleteReply } = require("../controllers/reviewController");
 
 const router = express.Router();
 
@@ -13,5 +13,7 @@ router.post("/", requireAuth, reviewCreate, reviewPhotoUpload, asyncHandler(crea
 router.put("/:id", requireAuth, reviewWrites, reviewPhotoUpload, asyncHandler(updateReview));
 router.delete("/:id", requireAuth, reviewWrites, asyncHandler(deleteReview));
 router.post("/:id/reply", requireAuth, reviewWrites, asyncHandler(replyToReview));
+router.put("/:id/reply", requireAuth, reviewWrites, asyncHandler(updateReply));
+router.delete("/:id/reply", requireAuth, reviewWrites, asyncHandler(deleteReply));
 
 module.exports = router;

@@ -2,7 +2,10 @@ const Review = require("../models/Review");
 const Product = require("../models/Product");
 const Artisan = require("../models/Artisan");
 
-const EDIT_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const EDIT_WINDOW_MS = 14 * DAY_MS;
+const REPLY_WINDOW_MS = 14 * DAY_MS;
+const WRITE_WINDOW_MS = 60 * DAY_MS; // after the order is Completed
 // What the public averages and lists count.
 const VISIBLE = { hiddenAt: null, deletedAt: null };
 
@@ -16,6 +19,19 @@ function displayNameOf(name) {
 
 const editableUntil = (review) => new Date(new Date(review.createdAt).getTime() + EDIT_WINDOW_MS);
 const isEditable = (review, now = Date.now()) => !review.hiddenAt && !review.deletedAt && editableUntil(review).getTime() > now;
+// A deleted review can be written again within its original 14 days.
+const canRewrite = (review, now = Date.now()) => Boolean(review.deletedAt) && editableUntil(review).getTime() > now;
+const isReplyEditable = (review, now = Date.now()) => Boolean(review.reply) && new Date(review.reply.at).getTime() + REPLY_WINDOW_MS > now;
+const replyView = (reply) => (reply ? { text: reply.text, at: reply.at, edited: Boolean(reply.editedAt) } : null);
+
+// "Verified purchase" means paid through PayPal. Orders from before online payment aren't.
+const isPaidByPayPal = (order) => order.payment?.provider === "paypal" && Boolean(order.payment?.capturedAt);
+// Reviews can be written for 60 days after the order was marked Completed. An order with no
+// recorded Completed date counts as outside them: its date can't be shown.
+function withinWriteWindow(order, now = Date.now()) {
+  const completed = order.statusHistory?.find((e) => e.status === "completed")?.at;
+  return Boolean(completed) && new Date(completed).getTime() + WRITE_WINDOW_MS > now;
+}
 
 // count and average of the visible reviews matching a filter.
 async function ratingOf(match) {
@@ -50,13 +66,14 @@ const ownReviewView = (r) => ({
   editedAt: r.editedAt || null,
   editableUntil: editableUntil(r),
   editable: isEditable(r),
-  reply: r.reply ? { text: r.reply.text, at: r.reply.at } : null,
+  reply: replyView(r.reply),
   hidden: Boolean(r.hiddenAt),
   hiddenReason: r.hiddenAt ? r.hiddenReason : "",
 });
 
-// For a buyer's orders: order id -> per item { canReview, block, review }. block says why an
-// item can't be reviewed: NOT_COMPLETED, OWN_PRODUCT, PRODUCT_GONE or DELETED.
+// For a buyer's orders: order id -> per item { canReview, block, review, rewriteUntil }. block says
+// why an item can't be reviewed: NOT_COMPLETED, NOT_PAID, WINDOW_CLOSED, OWN_PRODUCT, PRODUCT_GONE
+// or DELETED. rewriteUntil is set when canReview means writing a deleted review again.
 async function reviewStateFor(orders, userId) {
   const completed = orders.filter((o) => o.status === "completed");
   const [reviews, products, ownShop] = await Promise.all([
@@ -71,15 +88,17 @@ async function reviewStateFor(orders, userId) {
     state.set(String(order._id), order.items.map((item, index) => {
       if (order.status !== "completed") return { canReview: false, block: "NOT_COMPLETED", review: null };
       const review = byKey.get(`${order._id}:${index}`);
-      if (review?.deletedAt) return { canReview: false, block: "DELETED", review: null };
-      if (review) return { canReview: false, block: null, review: ownReviewView(review) };
+      if (review && !review.deletedAt) return { canReview: false, block: null, review: ownReviewView(review) };
+      if (!isPaidByPayPal(order)) return { canReview: false, block: "NOT_PAID", review: null };
       const product = productById.get(String(item.product));
       if (!product) return { canReview: false, block: "PRODUCT_GONE", review: null };
       if (ownShop && String(product.artisan) === String(ownShop._id)) return { canReview: false, block: "OWN_PRODUCT", review: null };
+      if (review) return canRewrite(review) ? { canReview: true, block: null, review: null, rewriteUntil: editableUntil(review) } : { canReview: false, block: "DELETED", review: null };
+      if (!withinWriteWindow(order)) return { canReview: false, block: "WINDOW_CLOSED", review: null };
       return { canReview: true, block: null, review: null };
     }));
   }
   return state;
 }
 
-module.exports = { EDIT_WINDOW_MS, VISIBLE, displayNameOf, editableUntil, isEditable, refreshRatings, ownReviewView, reviewStateFor };
+module.exports = { EDIT_WINDOW_MS, VISIBLE, displayNameOf, editableUntil, isEditable, canRewrite, isReplyEditable, replyView, isPaidByPayPal, withinWriteWindow, refreshRatings, ownReviewView, reviewStateFor };

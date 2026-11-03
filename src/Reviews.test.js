@@ -49,7 +49,8 @@ function mockApi({ reviews = { summary, reviews: [review()], page: 1, pages: 1 }
     if (path === '/reviews' && method === 'POST') return createError ? reply(createError, createError.status) : reply(ownReview(), 201);
     if (path === `/reviews/${REVIEW}` && method === 'PUT') return reply(ownReview());
     if (path === `/reviews/${REVIEW}` && method === 'DELETE') return reply({ deleted: true });
-    if (path === `/reviews/${REVIEW}/reply`) return replyError ? reply(replyError, replyError.status) : reply({ reply: { text: JSON.parse(options.body).text, at: '2026-10-02T00:00:00Z' } }, 201);
+    if (path === `/reviews/${REVIEW}/reply` && method === 'DELETE') return replyError ? reply(replyError, replyError.status) : reply({ deleted: true });
+    if (path === `/reviews/${REVIEW}/reply`) return replyError ? reply(replyError, replyError.status) : reply({ reply: { text: JSON.parse(options.body).text, at: '2026-10-02T00:00:00Z', edited: method === 'PUT' } }, method === 'PUT' ? 200 : 201);
     if (path === '/admin/reviews') return reply(admin);
     if (path === `/admin/reviews/${REVIEW}/hide`) return reply({ ...admin.reviews[0], hidden: true, hiddenReason: JSON.parse(options.body).reason });
     return reply([]);
@@ -264,6 +265,8 @@ describe('the review form', () => {
     ['locked after 14 days', { canReview: false, block: null, review: ownReview({ editable: false }) }, r.locked],
     ['hidden by an admin', { canReview: false, block: null, review: ownReview({ editable: false, hidden: true, hiddenReason: 'Off topic' }) }, 'Off topic'],
     ['order not completed', { canReview: false, block: 'NOT_COMPLETED', review: null }, r.blocked.NOT_COMPLETED],
+    ['order not paid through PayPal', { canReview: false, block: 'NOT_PAID', review: null }, r.blocked.NOT_PAID],
+    ['past the 60 days', { canReview: false, block: 'WINDOW_CLOSED', review: null }, r.blocked.WINDOW_CLOSED],
     ['your own shop', { canReview: false, block: 'OWN_PRODUCT', review: null }, r.blocked.OWN_PRODUCT],
     ['deleted earlier', { canReview: false, block: 'DELETED', review: null }, r.blocked.DELETED],
   ])('%s: explains, with no form', async (_, state, text) => {
@@ -273,6 +276,24 @@ describe('the review form', () => {
     expect(await screen.findByText(text, { exact: false })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: r.submit })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: r.save })).not.toBeInTheDocument();
+  });
+
+  test('a deleted review can be written again, and the page says until when', async () => {
+    mockApi({ order: openItem({ canReview: true, block: null, review: null, rewriteUntil: '2026-10-15T00:00:00Z' }) });
+    signIn(USERS.buyer);
+    open(formUrl);
+    expect(await screen.findByText(/You deleted your earlier review/)).toHaveTextContent('Oct 15, 2026');
+    fireEvent.click(screen.getByRole('radio', { name: '3 stars' }));
+    fireEvent.click(screen.getByRole('button', { name: r.submit }));
+    await waitFor(() => expect(callsTo('/reviews', 'POST')).toHaveLength(1));
+  });
+
+  test('deleting says it can be written again until the original date', async () => {
+    mockApi({ order: openItem({ canReview: false, block: null, review: ownReview() }) });
+    signIn(USERS.buyer);
+    open(formUrl);
+    fireEvent.click(await screen.findByRole('button', { name: r.delete }));
+    expect(screen.getByRole('alertdialog')).toHaveTextContent(/write it again until Oct 15, 2026/);
   });
 
   test.each([
@@ -322,6 +343,56 @@ describe('on the product page', () => {
     fireEvent.click(screen.getByRole('button', { name: r.replySend }));
     await waitFor(() => expect(screen.queryByLabelText(r.replyLabel)).not.toBeInTheDocument());
     expect(screen.getByText('Thank you!')).toBeInTheDocument();
+  });
+
+  const posted = { text: 'Thank you!', at: '2026-10-02T00:00:00Z', edited: false };
+
+  test('the artisan can edit their reply; it shows as edited', async () => {
+    mockApi({ reviews: { summary, reviews: [review({ reply: posted, canEditReply: true })], page: 1, pages: 1 } });
+    signIn(USERS.owner);
+    await openProduct();
+    fireEvent.click(await screen.findByRole('button', { name: r.replyEdit }));
+    expect(screen.getByLabelText(r.replyLabel)).toHaveValue('Thank you!');
+    fireEvent.click(screen.getByRole('button', { name: r.cancel }));
+    fireEvent.click(screen.getByRole('button', { name: r.replyEdit }));
+    fireEvent.change(screen.getByLabelText(r.replyLabel), { target: { value: 'Thanks so much!' } });
+    fireEvent.click(screen.getByRole('button', { name: r.replySave }));
+    await waitFor(() => expect(callsTo(`/reviews/${REVIEW}/reply`, 'PUT')).toHaveLength(1));
+    await waitFor(() => expect(screen.queryByLabelText(r.replyLabel)).not.toBeInTheDocument());
+    expect(screen.getByText('Thanks so much!')).toBeInTheDocument();
+    expect(screen.getByText(r.replyFrom, { exact: false })).toHaveTextContent(r.edited);
+  });
+
+  test('the artisan can delete their reply after confirming; no new reply is offered', async () => {
+    mockApi({ reviews: { summary, reviews: [review({ reply: posted, canEditReply: true })], page: 1, pages: 1 } });
+    signIn(USERS.owner);
+    await openProduct();
+    fireEvent.click(await screen.findByRole('button', { name: r.replyDelete }));
+    expect(callsTo(`/reviews/${REVIEW}/reply`, 'DELETE')).toHaveLength(0); // asks first
+    expect(screen.getByRole('alertdialog')).toHaveTextContent(r.replyDeleteConfirm);
+    fireEvent.click(screen.getByRole('button', { name: r.deleteYes }));
+    await waitFor(() => expect(screen.queryByText('Thank you!')).not.toBeInTheDocument());
+    expect(callsTo(`/reviews/${REVIEW}/reply`, 'DELETE')).toHaveLength(1);
+    expect(screen.queryByLabelText(r.replyLabel)).not.toBeInTheDocument();
+  });
+
+  test('a refused change says why and keeps the reply', async () => {
+    mockApi({ replyError: { status: 403, code: 'REPLY_LOCKED', error: 'x' }, reviews: { summary, reviews: [review({ reply: posted, canEditReply: true })], page: 1, pages: 1 } });
+    signIn(USERS.owner);
+    await openProduct();
+    fireEvent.click(await screen.findByRole('button', { name: r.replyDelete }));
+    fireEvent.click(screen.getByRole('button', { name: r.deleteYes }));
+    expect(await screen.findByText(r.errors.REPLY_LOCKED)).toBeInTheDocument();
+    expect(screen.getByText('Thank you!')).toBeInTheDocument();
+  });
+
+  test('no Edit or Delete on a reply once locked, or for anyone else', async () => {
+    mockApi({ reviews: { summary, reviews: [review({ reply: posted, canEditReply: false })], page: 1, pages: 1 } });
+    signIn(USERS.owner);
+    await openProduct();
+    expect(await screen.findByText('Thank you!')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: r.replyEdit })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: r.replyDelete })).not.toBeInTheDocument();
   });
 
   test('no reply form unless the server offers it', async () => {

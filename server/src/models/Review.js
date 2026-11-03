@@ -15,14 +15,16 @@ const reviewSchema = new mongoose.Schema(
     comment: { type: String, default: "", maxlength: 1000 },
     photos: { type: [String], default: [], validate: { validator: (v) => v.length <= 3, message: "A review can have at most 3 photos" } },
     editedAt: { type: Date, default: null },
-    // The artisan's one public reply.
-    reply: { type: new mongoose.Schema({ text: { type: String, required: true, maxlength: 1000 }, at: { type: Date, required: true } }, { _id: false }), default: undefined },
+    // The artisan's one public reply: editable for 14 days from "at". Deleting it is final for
+    // this review (replyDeletedAt), since there's one reply per review.
+    reply: { type: new mongoose.Schema({ text: { type: String, required: true, maxlength: 1000 }, at: { type: Date, required: true }, editedAt: { type: Date } }, { _id: false }), default: undefined },
+    replyDeletedAt: { type: Date, default: null },
     // Admin moderation. Hidden reviews aren't public and don't count in the averages.
     hiddenAt: { type: Date, default: null },
     hiddenReason: { type: String, default: "", maxlength: 300 },
     hiddenBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
-    // Deleted by the buyer. The row stays, emptied, so the order item can't be reviewed again
-    // (which would also restart the 14 days and notify the artisan a second time).
+    // Deleted by the buyer. The row stays, emptied: createdAt keeps the original 14 days, in
+    // which it can be written again (without restarting them). After that it's final.
     deletedAt: { type: Date, default: null },
   },
   { timestamps: true }

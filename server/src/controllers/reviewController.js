@@ -8,11 +8,12 @@ const { notify } = require("../utils/notify");
 const { cleanText } = require("../utils/text");
 const { isShopLive } = require("../utils/shops");
 const { saveReviewPhotos, deleteReviewPhoto, MAX_REVIEW_PHOTOS } = require("../utils/imageStorage");
-const { VISIBLE, displayNameOf, isEditable, refreshRatings, ownReviewView } = require("../utils/reviews");
+const { EDIT_WINDOW_MS, VISIBLE, displayNameOf, isEditable, canRewrite, isReplyEditable, replyView, isPaidByPayPal, withinWriteWindow, refreshRatings, ownReviewView } = require("../utils/reviews");
 const { visibleTo } = require("./productController");
 
 // Verified reviews. Everything is checked here, whatever the UI shows: only the buyer of a
-// completed order item can review it, once, and never their own shop's product.
+// completed order item paid through PayPal can review it, once, within 60 days of completion,
+// and never their own shop's product.
 // Public responses are built by hand: a first name and the review, never an email, address,
 // phone, buyer id or anything about the order.
 const COMMENT_MAX = 1000;
@@ -52,6 +53,7 @@ async function createReview(req, res) {
   const item = order?.items[index];
   if (!item) return fail(res, 404, "ORDER_NOT_FOUND", "Order item not found");
   if (order.status !== "completed") return fail(res, 409, "ORDER_NOT_COMPLETED", "You can review this once the order is completed");
+  if (!isPaidByPayPal(order)) return fail(res, 409, "ORDER_NOT_PAID", "Only orders paid through PayPal can be reviewed");
 
   const product = await Product.findById(item.product).select("title titleEn artisan");
   if (!product) return fail(res, 404, "PRODUCT_GONE", "This product no longer exists");
@@ -59,15 +61,35 @@ async function createReview(req, res) {
   if (!shop) return fail(res, 404, "PRODUCT_GONE", "This product no longer exists");
   if (shop.user.equals(req.user.id)) return fail(res, 403, "OWN_PRODUCT", "You can't review your own shop's products");
 
+  // Writing a deleted review again depends only on its original 14 days: the buyer wrote it
+  // in time, so the 60 days don't apply to the rewrite.
+  const existing = await Review.findOne({ order: order._id, itemIndex: index });
+  if (existing && !existing.deletedAt) return fail(res, 409, "ALREADY_REVIEWED", "You've already reviewed this item");
+  if (existing && !canRewrite(existing)) return fail(res, 409, "DELETED_FINAL", "This review was deleted and can't be written again");
+  if (!existing && !withinWriteWindow(order)) return fail(res, 409, "REVIEW_WINDOW_CLOSED", "Reviews can be written for 60 days after an order is completed");
+
   const rating = parseRating(req.body.rating);
   if (rating === null) return fail(res, 400, "BAD_RATING", "Rating must be a whole number from 1 to 5");
   const comment = readComment(res, req.body);
   if (comment === null) return undefined;
-  if (await Review.exists({ order: order._id, itemIndex: index })) return fail(res, 409, "ALREADY_REVIEWED", "You've already reviewed this item");
 
   // Storage is only touched once everything above is valid.
   const user = await User.findById(req.user.id).select("name");
   const photos = await saveReviewPhotos(req.files || []);
+  if (existing) {
+    // Same row, so createdAt (and the 14 days) stay. Like an edit, it notifies nobody.
+    const rewritten = await Review.findOneAndUpdate(
+      { _id: existing._id, buyer: req.user.id, deletedAt: { $ne: null }, createdAt: { $gt: new Date(Date.now() - EDIT_WINDOW_MS) } },
+      { $set: { deletedAt: null, displayName: displayNameOf(user?.name), rating, comment, photos, editedAt: new Date() } },
+      { new: true },
+    );
+    if (!rewritten) {
+      await removePhotos(photos);
+      return fail(res, 409, "ALREADY_REVIEWED", "You've already reviewed this item"); // two at once
+    }
+    await refreshRatings(rewritten);
+    return res.status(201).json(ownReviewView(rewritten));
+  }
   let review;
   try {
     review = await Review.create({
@@ -131,13 +153,14 @@ async function updateReview(req, res) {
   res.json(ownReviewView(updated));
 }
 
-// DELETE /api/reviews/:id. Buyer only, within 14 days. See Review.deletedAt: the item stays used.
+// DELETE /api/reviews/:id. Buyer only, within 14 days. It can be written again in what's left of
+// them (see Review.deletedAt). The artisan's reply goes with it, and a rewrite can get a new one.
 async function deleteReview(req, res) {
   const review = await loadOwnEditable(req, res);
   if (!review) return undefined;
   const deleted = await Review.findOneAndUpdate(
     { _id: review._id, buyer: req.user.id, ...VISIBLE },
-    { $set: { deletedAt: new Date(), comment: "", photos: [], displayName: "" }, $unset: { reply: 1 } },
+    { $set: { deletedAt: new Date(), comment: "", photos: [], displayName: "" }, $unset: { reply: 1, replyDeletedAt: 1 } },
   );
   if (!deleted) return notFound(res);
   await removePhotos(deleted.photos);
@@ -145,8 +168,16 @@ async function deleteReview(req, res) {
   res.json({ deleted: true });
 }
 
-// POST /api/reviews/:id/reply { text }: the owning artisan's one public reply. It stays as
-// written. The artisan has no way to change the review itself.
+function readReply(res, body) {
+  if (body?.text !== undefined && typeof body.text !== "string") { fail(res, 400, "EMPTY_REPLY", "Write a reply first"); return null; }
+  const text = cleanText(body?.text);
+  if (!text) { fail(res, 400, "EMPTY_REPLY", "Write a reply first"); return null; }
+  if (text.length > REPLY_MAX) { fail(res, 400, "REPLY_TOO_LONG", `Replies can be up to ${REPLY_MAX} characters`); return null; }
+  return text;
+}
+
+// POST /api/reviews/:id/reply { text }: the owning artisan's one public reply. The artisan has
+// no way to change the review itself.
 async function replyToReview(req, res) {
   if (!mongoose.isValidObjectId(req.params.id)) return notFound(res);
   const review = await Review.findOne({ _id: req.params.id, ...VISIBLE });
@@ -154,21 +185,62 @@ async function replyToReview(req, res) {
   const shop = await Artisan.findOne({ _id: review.artisan, user: req.user.id }).select("shopName status");
   if (!shop) return fail(res, 403, "NOT_YOUR_SHOP", "Only this shop's artisan can reply");
   if (!isShopLive(shop)) return fail(res, 403, "SHOP_NOT_APPROVED", "Your shop must be approved to reply");
-  if (req.body?.text !== undefined && typeof req.body.text !== "string") return fail(res, 400, "EMPTY_REPLY", "Write a reply first");
-  const text = cleanText(req.body?.text);
-  if (!text) return fail(res, 400, "EMPTY_REPLY", "Write a reply first");
-  if (text.length > REPLY_MAX) return fail(res, 400, "REPLY_TOO_LONG", `Replies can be up to ${REPLY_MAX} characters`);
+  if (review.replyDeletedAt) return fail(res, 409, "REPLY_DELETED", "The reply to this review was deleted. Each review gets one reply");
+  const text = readReply(res, req.body);
+  if (text === null) return undefined;
 
   // Conditional, so a double click can't reply twice.
   const updated = await Review.findOneAndUpdate(
-    { _id: review._id, ...VISIBLE, reply: { $exists: false } },
+    { _id: review._id, ...VISIBLE, reply: { $exists: false }, replyDeletedAt: null },
     { $set: { reply: { text, at: new Date() } } },
     { new: true },
   );
   if (!updated) return fail(res, 409, "REPLY_EXISTS", "This review already has a reply");
   const product = await Product.findById(review.product).select("title titleEn");
   await notify(review.buyer, "review_replied", { productId: review.product, title: product?.title, titleEn: product?.titleEn, shopName: shop.shopName }, reviewsLink(review.product));
-  res.status(201).json({ reply: { text: updated.reply.text, at: updated.reply.at } });
+  res.status(201).json({ reply: replyView(updated.reply) });
+}
+
+// The caller's own reply, still open to changes. Otherwise sends the error and returns null.
+async function loadOwnReply(req, res) {
+  if (!mongoose.isValidObjectId(req.params.id)) { notFound(res); return null; }
+  const review = await Review.findOne({ _id: req.params.id, ...VISIBLE });
+  if (!review) { notFound(res); return null; }
+  const shop = await Artisan.findOne({ _id: review.artisan, user: req.user.id }).select("status");
+  if (!shop) { fail(res, 403, "NOT_YOUR_SHOP", "Only this shop's artisan can change its reply"); return null; }
+  if (!isShopLive(shop)) { fail(res, 403, "SHOP_NOT_APPROVED", "Your shop must be approved to change a reply"); return null; }
+  if (!review.reply) { fail(res, 404, "NO_REPLY", "This review has no reply"); return null; }
+  if (!isReplyEditable(review)) { fail(res, 403, "REPLY_LOCKED", "Replies can only be changed for 14 days"); return null; }
+  return review;
+}
+
+// PUT /api/reviews/:id/reply { text }: within 14 days of posting; editing doesn't restart them
+// or notify the buyer.
+async function updateReply(req, res) {
+  const review = await loadOwnReply(req, res);
+  if (!review) return undefined;
+  const text = readReply(res, req.body);
+  if (text === null) return undefined;
+  const updated = await Review.findOneAndUpdate(
+    { _id: review._id, ...VISIBLE, reply: { $exists: true } },
+    { $set: { "reply.text": text, "reply.editedAt": new Date() } },
+    { new: true },
+  );
+  if (!updated) return fail(res, 404, "NO_REPLY", "This review has no reply");
+  return res.json({ reply: replyView(updated.reply) });
+}
+
+// DELETE /api/reviews/:id/reply: within 14 days of posting. No new reply can follow, and the
+// buyer isn't notified.
+async function deleteReply(req, res) {
+  const review = await loadOwnReply(req, res);
+  if (!review) return undefined;
+  const updated = await Review.findOneAndUpdate(
+    { _id: review._id, ...VISIBLE, reply: { $exists: true } },
+    { $set: { replyDeletedAt: new Date() }, $unset: { reply: 1 } },
+  );
+  if (!updated) return fail(res, 404, "NO_REPLY", "This review has no reply");
+  return res.json({ deleted: true });
 }
 
 // ── read ──
@@ -184,9 +256,10 @@ function publicView(r, viewerId, isOwner) {
     verified: true,
     createdAt: r.createdAt,
     edited: Boolean(r.editedAt),
-    reply: r.reply ? { text: r.reply.text, at: r.reply.at } : null,
+    reply: replyView(r.reply),
     mine,
-    canReply: isOwner && !r.reply,
+    canReply: isOwner && !r.reply && !r.replyDeletedAt,
+    canEditReply: isOwner && isReplyEditable(r),
     ...(mine && { own: { orderId: r.order, itemIndex: r.itemIndex, editable: isEditable(r) } }),
   };
 }
@@ -226,7 +299,7 @@ const adminView = (r) => ({
   photos: r.photos,
   displayName: r.displayName,
   createdAt: r.createdAt,
-  reply: r.reply ? { text: r.reply.text, at: r.reply.at } : null,
+  reply: replyView(r.reply),
   hidden: Boolean(r.hiddenAt),
   hiddenReason: r.hiddenAt ? r.hiddenReason : "",
   product: r.product ? { id: r.product._id, title: r.product.title, titleEn: r.product.titleEn || "" } : null,
@@ -272,4 +345,4 @@ async function hideReview(req, res) {
 // PUT /api/admin/reviews/:id/unhide: undoes a hide made by mistake.
 const unhideReview = (req, res) => setHidden(req, res, { hiddenAt: { $ne: null } }, { $set: { hiddenAt: null, hiddenReason: "" }, $unset: { hiddenBy: 1 } });
 
-module.exports = { createReview, updateReview, deleteReview, replyToReview, listProductReviews, adminListReviews, hideReview, unhideReview };
+module.exports = { createReview, updateReview, deleteReview, replyToReview, updateReply, deleteReply, listProductReviews, adminListReviews, hideReview, unhideReview };

@@ -155,6 +155,8 @@ export const api = {
   updateReview: (id, formData) => request(`/reviews/${id}`, { method: "PUT", auth: true, formData }),
   deleteReview: (id) => request(`/reviews/${id}`, { method: "DELETE", auth: true }),
   replyToReview: (id, text) => request(`/reviews/${id}/reply`, { method: "POST", auth: true, body: { text } }),
+  updateReply: (id, text) => request(`/reviews/${id}/reply`, { method: "PUT", auth: true, body: { text } }),
+  deleteReply: (id) => request(`/reviews/${id}/reply`, { method: "DELETE", auth: true }),
   // Admin only.
   getAdminReviews: (status, page = 1) => request(`/admin/reviews?page=${page}${status ? `&status=${status}` : ""}`, { auth: true }),
   hideReview: (id, reason) => request(`/admin/reviews/${id}/hide`, { method: "PUT", auth: true, body: { reason } }),
