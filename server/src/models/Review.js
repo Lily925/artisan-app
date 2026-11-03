@@ -15,9 +15,10 @@ const reviewSchema = new mongoose.Schema(
     comment: { type: String, default: "", maxlength: 1000 },
     photos: { type: [String], default: [], validate: { validator: (v) => v.length <= 3, message: "A review can have at most 3 photos" } },
     editedAt: { type: Date, default: null },
-    // The artisan's one public reply: editable for 14 days from "at". Deleting it is final for
-    // this review (replyDeletedAt), since there's one reply per review.
+    // The artisan's one public reply. For 14 days from replyFirstAt it can be edited, or deleted
+    // and posted again; reposting doesn't restart them. After that it's final.
     reply: { type: new mongoose.Schema({ text: { type: String, required: true, maxlength: 1000 }, at: { type: Date, required: true }, editedAt: { type: Date } }, { _id: false }), default: undefined },
+    replyFirstAt: { type: Date, default: null },
     replyDeletedAt: { type: Date, default: null },
     // Admin moderation. Hidden reviews aren't public and don't count in the averages.
     hiddenAt: { type: Date, default: null },

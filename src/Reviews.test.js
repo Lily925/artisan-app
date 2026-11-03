@@ -50,7 +50,7 @@ function mockApi({ reviews = { summary, reviews: [review()], page: 1, pages: 1 }
     if (path === `/reviews/${REVIEW}` && method === 'PUT') return reply(ownReview());
     if (path === `/reviews/${REVIEW}` && method === 'DELETE') return reply({ deleted: true });
     if (path === `/reviews/${REVIEW}/reply` && method === 'DELETE') return replyError ? reply(replyError, replyError.status) : reply({ deleted: true });
-    if (path === `/reviews/${REVIEW}/reply`) return replyError ? reply(replyError, replyError.status) : reply({ reply: { text: JSON.parse(options.body).text, at: '2026-10-02T00:00:00Z', edited: method === 'PUT' } }, method === 'PUT' ? 200 : 201);
+    if (path === `/reviews/${REVIEW}/reply`) return replyError ? reply(replyError, replyError.status) : reply({ reply: { text: JSON.parse(options.body).text, at: '2026-10-02T00:00:00Z', edited: method === 'PUT' }, replyUntil: '2026-10-16T00:00:00Z' }, method === 'PUT' ? 200 : 201);
     if (path === '/admin/reviews') return reply(admin);
     if (path === `/admin/reviews/${REVIEW}/hide`) return reply({ ...admin.reviews[0], hidden: true, hiddenReason: JSON.parse(options.body).reason });
     return reply([]);
@@ -348,7 +348,7 @@ describe('on the product page', () => {
   const posted = { text: 'Thank you!', at: '2026-10-02T00:00:00Z', edited: false };
 
   test('the artisan can edit their reply; it shows as edited', async () => {
-    mockApi({ reviews: { summary, reviews: [review({ reply: posted, canEditReply: true })], page: 1, pages: 1 } });
+    mockApi({ reviews: { summary, reviews: [review({ reply: posted, canEditReply: true, replyUntil: '2026-10-16T00:00:00Z' })], page: 1, pages: 1 } });
     signIn(USERS.owner);
     await openProduct();
     fireEvent.click(await screen.findByRole('button', { name: r.replyEdit }));
@@ -363,21 +363,34 @@ describe('on the product page', () => {
     expect(screen.getByText(r.replyFrom, { exact: false })).toHaveTextContent(r.edited);
   });
 
-  test('the artisan can delete their reply after confirming; no new reply is offered', async () => {
-    mockApi({ reviews: { summary, reviews: [review({ reply: posted, canEditReply: true })], page: 1, pages: 1 } });
+  test('the artisan can delete their reply after confirming, then post a new one until the original date', async () => {
+    mockApi({ reviews: { summary, reviews: [review({ reply: posted, canEditReply: true, replyUntil: '2026-10-16T00:00:00Z' })], page: 1, pages: 1 } });
     signIn(USERS.owner);
     await openProduct();
     fireEvent.click(await screen.findByRole('button', { name: r.replyDelete }));
     expect(callsTo(`/reviews/${REVIEW}/reply`, 'DELETE')).toHaveLength(0); // asks first
-    expect(screen.getByRole('alertdialog')).toHaveTextContent(r.replyDeleteConfirm);
+    expect(screen.getByRole('alertdialog')).toHaveTextContent(/post a new one until Oct 1[56], 2026/);
     fireEvent.click(screen.getByRole('button', { name: r.deleteYes }));
     await waitFor(() => expect(screen.queryByText('Thank you!')).not.toBeInTheDocument());
     expect(callsTo(`/reviews/${REVIEW}/reply`, 'DELETE')).toHaveLength(1);
+    expect(screen.getByText(/You deleted your reply/)).toHaveTextContent(/until Oct 1[56], 2026/);
+    fireEvent.change(screen.getByLabelText(r.replyLabel), { target: { value: 'Second attempt' } });
+    fireEvent.click(screen.getByRole('button', { name: r.replySend }));
+    await waitFor(() => expect(screen.queryByLabelText(r.replyLabel)).not.toBeInTheDocument());
+    expect(screen.getByText('Second attempt')).toBeInTheDocument();
+  });
+
+  test('after the 14 days a deleted reply is final: no form, and the server\'s refusal has words', async () => {
+    mockApi({ reviews: { summary, reviews: [review({ reply: null, canReply: false, canEditReply: false, replyUntil: '2026-10-16T00:00:00Z' })], page: 1, pages: 1 } });
+    signIn(USERS.owner);
+    await openProduct();
+    await screen.findByText('Lovely boots');
     expect(screen.queryByLabelText(r.replyLabel)).not.toBeInTheDocument();
+    expect(r.errors.REPLY_DELETED).toMatch(/14 days/);
   });
 
   test('a refused change says why and keeps the reply', async () => {
-    mockApi({ replyError: { status: 403, code: 'REPLY_LOCKED', error: 'x' }, reviews: { summary, reviews: [review({ reply: posted, canEditReply: true })], page: 1, pages: 1 } });
+    mockApi({ replyError: { status: 403, code: 'REPLY_LOCKED', error: 'x' }, reviews: { summary, reviews: [review({ reply: posted, canEditReply: true, replyUntil: '2026-10-16T00:00:00Z' })], page: 1, pages: 1 } });
     signIn(USERS.owner);
     await openProduct();
     fireEvent.click(await screen.findByRole('button', { name: r.replyDelete }));

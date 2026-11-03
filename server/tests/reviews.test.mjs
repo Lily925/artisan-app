@@ -478,9 +478,10 @@ try {
   const editReply = (who, text = "Edited reply") => send(`/reviews/${rpId}/reply`, { method: "PUT", token: who.token, json: { text } });
   const dropReply = (who) => send(`/reviews/${rpId}/reply`, { method: "DELETE", token: who.token });
   const replyAge = async (days) => {
-    const { modifiedCount } = await Review.collection.updateOne({ _id: new mongoose.Types.ObjectId(rpId) }, { $set: { "reply.at": daysAgo(days) } });
+    const { modifiedCount } = await Review.collection.updateOne({ _id: new mongoose.Types.ObjectId(rpId) }, { $set: { replyFirstAt: daysAgo(days), ...(await Review.exists({ _id: rpId, reply: { $exists: true } }) && { "reply.at": daysAgo(days) }) } });
     if (modifiedCount !== 1) throw new Error("the reply wasn't aged");
   };
+  const firstReplyAt = async () => (await Review.findById(rpId)).replyFirstAt.getTime();
   const rpNotes = () => Notification.countDocuments({ user: rp.user._id, type: "review_replied" });
   const rpShown = async (who) => (await publicList(rwProduct, who ? { token: who.token } : {})).body.reviews.find((x) => x.id === rpId);
   check("editing a reply that doesn't exist → 404 NO_REPLY", (await editReply(owner)).body.code === "NO_REPLY");
@@ -522,15 +523,37 @@ try {
   check("the artisan can delete it within 14 days", r.status === 200 && r.body.deleted === true, r.text);
   check("…it's gone from the page", (await rpShown()).reply === null);
   check("…no notification on delete", (await rpNotes()) === 1);
-  check("…one reply per review: no new one is offered", (await rpShown(owner)).canReply === false && (await rpShown(owner)).canEditReply === false);
-  r = await send(`/reviews/${rpId}/reply`, { method: "POST", token: owner.token, json: { text: "Again" } });
-  check("…and one is refused → 409 REPLY_DELETED", r.status === 409 && r.body.code === "REPLY_DELETED", `${r.status} ${r.body.code}`);
-  check("…editing it now → 404", (await editReply(owner)).status === 404);
+  const firstAt = await firstReplyAt();
+  check("…a new one is offered, with the original end date", (await rpShown(owner)).canReply === true && (await rpShown(owner)).canEditReply === false && new Date((await rpShown(owner)).replyUntil).getTime() === firstAt + 14 * 86400000);
+  check("…a visitor sees neither the offer nor the date", (await rpShown()).canReply === false && !("replyUntil" in (await rpShown())));
+  check("…editing while it's deleted → 404", (await editReply(owner)).status === 404);
+  await replyAge(13);
+  const agedFirstAt = await firstReplyAt();
+  r = await send(`/reviews/${rpId}/reply`, { method: "POST", token: otherOwner.token, json: { text: "Not mine" } });
+  check("another artisan still can't post one → 403", r.status === 403 && r.body.code === "NOT_YOUR_SHOP");
+  r = await send(`/reviews/${rpId}/reply`, { method: "POST", token: owner.token, json: { text: "Second attempt" } });
+  check("the artisan can post a new one within the 14 days", r.status === 201 && r.body.reply.text === "Second attempt" && r.body.reply.edited === true, r.text);
+  check("…counted from the first reply, not restarted", (await firstReplyAt()) === agedFirstAt && new Date(r.body.replyUntil).getTime() === agedFirstAt + 14 * 86400000);
+  check("…with no second notification to the buyer", (await rpNotes()) === 1);
+  check("…it's public", (await rpShown()).reply.text === "Second attempt");
+  r = await send(`/reviews/${rpId}/reply`, { method: "POST", token: owner.token, json: { text: "A third" } });
+  check("…still one at a time → 409 REPLY_EXISTS", r.status === 409 && r.body.code === "REPLY_EXISTS");
+  await replyAge(14.01);
+  check("the new one locks when the original 14 days end", (await editReply(owner, "Late")).body.code === "REPLY_LOCKED" && (await dropReply(owner)).body.code === "REPLY_LOCKED");
+  await replyAge(13);
+  check("…and can be deleted again before that", (await dropReply(owner)).status === 200);
+  await replyAge(14.01);
+  check("after the 14 days a deleted reply is final: not offered", (await rpShown(owner)).canReply === false);
+  r = await send(`/reviews/${rpId}/reply`, { method: "POST", token: owner.token, json: { text: "Too late" } });
+  check("…and refused → 409 REPLY_DELETED", r.status === 409 && r.body.code === "REPLY_DELETED", `${r.status} ${r.body.code}`);
+  check("…nothing was stored", (await rpShown()).reply === null);
   check("the review itself is untouched", (await rpShown()).comment === "Nice");
   await send(`/reviews/${rpId}`, { method: "DELETE", token: rp.token });
   await write(rp, rpOrder, { rating: 3, comment: "New text" });
   r = await send(`/reviews/${rpId}/reply`, { method: "POST", token: owner.token, json: { text: "To the new text" } });
   check("a rewritten review is new content: it can get a reply", r.status === 201, r.text);
+  check("…with its own 14 days", (await rpShown(owner)).canEditReply === true && Date.now() - (await firstReplyAt()) < 60000);
+  check("…and it notifies the buyer", (await rpNotes()) === 2);
 
   // ── hidden products ──
   const hiddenBuyer = await account("hid");

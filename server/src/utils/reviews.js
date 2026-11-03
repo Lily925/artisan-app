@@ -21,7 +21,15 @@ const editableUntil = (review) => new Date(new Date(review.createdAt).getTime() 
 const isEditable = (review, now = Date.now()) => !review.hiddenAt && !review.deletedAt && editableUntil(review).getTime() > now;
 // A deleted review can be written again within its original 14 days.
 const canRewrite = (review, now = Date.now()) => Boolean(review.deletedAt) && editableUntil(review).getTime() > now;
-const isReplyEditable = (review, now = Date.now()) => Boolean(review.reply) && new Date(review.reply.at).getTime() + REPLY_WINDOW_MS > now;
+// The reply's 14 days run from the first reply, however often it's deleted and posted again.
+const replyUntil = (review) => {
+  const first = review.replyFirstAt || review.reply?.at;
+  return first ? new Date(new Date(first).getTime() + REPLY_WINDOW_MS) : null;
+};
+const replyWindowOpen = (review, now = Date.now()) => Boolean(replyUntil(review)) && replyUntil(review).getTime() > now;
+const isReplyEditable = (review, now = Date.now()) => Boolean(review.reply) && replyWindowOpen(review, now);
+// No reply yet, or a deleted one still inside its 14 days.
+const canPostReply = (review, now = Date.now()) => !review.reply && (!review.replyDeletedAt || replyWindowOpen(review, now));
 const replyView = (reply) => (reply ? { text: reply.text, at: reply.at, edited: Boolean(reply.editedAt) } : null);
 
 // "Verified purchase" means paid through PayPal. Orders from before online payment aren't.
@@ -101,4 +109,4 @@ async function reviewStateFor(orders, userId) {
   return state;
 }
 
-module.exports = { EDIT_WINDOW_MS, VISIBLE, displayNameOf, editableUntil, isEditable, canRewrite, isReplyEditable, replyView, isPaidByPayPal, withinWriteWindow, refreshRatings, ownReviewView, reviewStateFor };
+module.exports = { EDIT_WINDOW_MS, VISIBLE, displayNameOf, editableUntil, isEditable, canRewrite, isReplyEditable, canPostReply, replyUntil, replyView, isPaidByPayPal, withinWriteWindow, refreshRatings, ownReviewView, reviewStateFor };

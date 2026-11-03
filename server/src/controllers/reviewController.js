@@ -8,7 +8,7 @@ const { notify } = require("../utils/notify");
 const { cleanText } = require("../utils/text");
 const { isShopLive } = require("../utils/shops");
 const { saveReviewPhotos, deleteReviewPhoto, MAX_REVIEW_PHOTOS } = require("../utils/imageStorage");
-const { EDIT_WINDOW_MS, VISIBLE, displayNameOf, isEditable, canRewrite, isReplyEditable, replyView, isPaidByPayPal, withinWriteWindow, refreshRatings, ownReviewView } = require("../utils/reviews");
+const { EDIT_WINDOW_MS, VISIBLE, displayNameOf, isEditable, canRewrite, isReplyEditable, canPostReply, replyUntil, replyView, isPaidByPayPal, withinWriteWindow, refreshRatings, ownReviewView } = require("../utils/reviews");
 const { visibleTo } = require("./productController");
 
 // Verified reviews. Everything is checked here, whatever the UI shows: only the buyer of a
@@ -154,13 +154,14 @@ async function updateReview(req, res) {
 }
 
 // DELETE /api/reviews/:id. Buyer only, within 14 days. It can be written again in what's left of
-// them (see Review.deletedAt). The artisan's reply goes with it, and a rewrite can get a new one.
+// them (see Review.deletedAt). The artisan's reply goes with it, and a rewrite can get a new one,
+// with its own 14 days.
 async function deleteReview(req, res) {
   const review = await loadOwnEditable(req, res);
   if (!review) return undefined;
   const deleted = await Review.findOneAndUpdate(
     { _id: review._id, buyer: req.user.id, ...VISIBLE },
-    { $set: { deletedAt: new Date(), comment: "", photos: [], displayName: "" }, $unset: { reply: 1, replyDeletedAt: 1 } },
+    { $set: { deletedAt: new Date(), comment: "", photos: [], displayName: "" }, $unset: { reply: 1, replyDeletedAt: 1, replyFirstAt: 1 } },
   );
   if (!deleted) return notFound(res);
   await removePhotos(deleted.photos);
@@ -176,8 +177,9 @@ function readReply(res, body) {
   return text;
 }
 
-// POST /api/reviews/:id/reply { text }: the owning artisan's one public reply. The artisan has
-// no way to change the review itself.
+// POST /api/reviews/:id/reply { text }: the owning artisan's one public reply. It can be posted
+// again after deleting it, within 14 days of the first reply; only the first notifies the buyer.
+// The artisan has no way to change the review itself.
 async function replyToReview(req, res) {
   if (!mongoose.isValidObjectId(req.params.id)) return notFound(res);
   const review = await Review.findOne({ _id: req.params.id, ...VISIBLE });
@@ -185,20 +187,25 @@ async function replyToReview(req, res) {
   const shop = await Artisan.findOne({ _id: review.artisan, user: req.user.id }).select("shopName status");
   if (!shop) return fail(res, 403, "NOT_YOUR_SHOP", "Only this shop's artisan can reply");
   if (!isShopLive(shop)) return fail(res, 403, "SHOP_NOT_APPROVED", "Your shop must be approved to reply");
-  if (review.replyDeletedAt) return fail(res, 409, "REPLY_DELETED", "The reply to this review was deleted. Each review gets one reply");
+  if (review.reply) return fail(res, 409, "REPLY_EXISTS", "This review already has a reply");
+  if (!canPostReply(review)) return fail(res, 409, "REPLY_DELETED", "The reply was deleted and the 14 days to post it again have passed");
   const text = readReply(res, req.body);
   if (text === null) return undefined;
 
   // Conditional, so a double click can't reply twice.
+  const now = new Date();
+  const reposting = Boolean(review.replyDeletedAt);
   const updated = await Review.findOneAndUpdate(
-    { _id: review._id, ...VISIBLE, reply: { $exists: false }, replyDeletedAt: null },
-    { $set: { reply: { text, at: new Date() } } },
+    { _id: review._id, ...VISIBLE, reply: { $exists: false }, replyDeletedAt: review.replyDeletedAt },
+    { $set: { reply: { text, at: now, ...(reposting && { editedAt: now }) }, replyFirstAt: review.replyFirstAt || now, replyDeletedAt: null } },
     { new: true },
   );
   if (!updated) return fail(res, 409, "REPLY_EXISTS", "This review already has a reply");
-  const product = await Product.findById(review.product).select("title titleEn");
-  await notify(review.buyer, "review_replied", { productId: review.product, title: product?.title, titleEn: product?.titleEn, shopName: shop.shopName }, reviewsLink(review.product));
-  res.status(201).json({ reply: replyView(updated.reply) });
+  if (!reposting) {
+    const product = await Product.findById(review.product).select("title titleEn");
+    await notify(review.buyer, "review_replied", { productId: review.product, title: product?.title, titleEn: product?.titleEn, shopName: shop.shopName }, reviewsLink(review.product));
+  }
+  res.status(201).json({ reply: replyView(updated.reply), replyUntil: replyUntil(updated) });
 }
 
 // The caller's own reply, still open to changes. Otherwise sends the error and returns null.
@@ -214,8 +221,8 @@ async function loadOwnReply(req, res) {
   return review;
 }
 
-// PUT /api/reviews/:id/reply { text }: within 14 days of posting; editing doesn't restart them
-// or notify the buyer.
+// PUT /api/reviews/:id/reply { text }: within 14 days of the first reply; editing doesn't restart
+// them or notify the buyer.
 async function updateReply(req, res) {
   const review = await loadOwnReply(req, res);
   if (!review) return undefined;
@@ -227,11 +234,11 @@ async function updateReply(req, res) {
     { new: true },
   );
   if (!updated) return fail(res, 404, "NO_REPLY", "This review has no reply");
-  return res.json({ reply: replyView(updated.reply) });
+  return res.json({ reply: replyView(updated.reply), replyUntil: replyUntil(updated) });
 }
 
-// DELETE /api/reviews/:id/reply: within 14 days of posting. No new reply can follow, and the
-// buyer isn't notified.
+// DELETE /api/reviews/:id/reply: within 14 days of the first reply, which are also how long a new
+// one can be posted. The buyer isn't notified.
 async function deleteReply(req, res) {
   const review = await loadOwnReply(req, res);
   if (!review) return undefined;
@@ -258,8 +265,9 @@ function publicView(r, viewerId, isOwner) {
     edited: Boolean(r.editedAt),
     reply: replyView(r.reply),
     mine,
-    canReply: isOwner && !r.reply && !r.replyDeletedAt,
+    canReply: isOwner && canPostReply(r),
     canEditReply: isOwner && isReplyEditable(r),
+    ...(isOwner && { replyUntil: replyUntil(r) }),
     ...(mine && { own: { orderId: r.order, itemIndex: r.itemIndex, editable: isEditable(r) } }),
   };
 }
