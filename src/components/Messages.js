@@ -251,19 +251,16 @@ function EmptyInbox({ t, role, shops, onStartChat, navigate }) {
 }
 
 // Conversations on the left, the open chat on the right; one or the other on phones.
-// openRequest = { id }: open that conversation (from a button or a notification).
-export default function Messages({ t, lang, fmtAmt, openRequest, onOpenProduct, onOpenOrder, onApiError, navigate, role = "buyer", suggestedShops = [], onStartChat }) {
+// activeId comes from the address (/messages/:conversationId); onSelect(id | null) changes it.
+export default function Messages({ t, lang, fmtAmt, activeId = null, onSelect, onOpenProduct, onOpenOrder, onApiError, navigate, role = "buyer", suggestedShops = [], onStartChat }) {
   const m = t.messages;
   const [conversations, setConversations] = useState(null); // null = loading
   const [listFailed, setListFailed] = useState(false);
-  const [activeId, setActiveId] = useState(openRequest?.id || null);
   const [chat, setChat] = useState(null); // { id, conversation, card, messages, hasMore }
   const [chatFailed, setChatFailed] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(0);
   const activeRef = useRef(activeId);
   activeRef.current = activeId;
-
-  useEffect(() => { if (openRequest?.id) setActiveId(openRequest.id); }, [openRequest]);
 
   useLayoutEffect(() => {
     const measure = () => setHeaderHeight(document.querySelector("header")?.getBoundingClientRect().height || 0);
@@ -347,7 +344,7 @@ export default function Messages({ t, lang, fmtAmt, openRequest, onOpenProduct, 
             ) : shown.length === 0 ? (
               <p style={{ fontFamily:FONT_SANS, fontSize:13, color:COLORS.inkSoft, padding:"32px 16px", textAlign:"center", lineHeight:1.5 }}>…</p>
             ) : shown.map((c) => (
-              <button key={c.id} type="button" className={`msg-row${c.id === activeId ? " active" : ""}`} aria-current={c.id === activeId ? "true" : undefined} onClick={() => setActiveId(c.id)}>
+              <button key={c.id} type="button" className={`msg-row${c.id === activeId ? " active" : ""}`} aria-current={c.id === activeId ? "true" : undefined} onClick={() => onSelect(c.id)}>
                 <ArtisanAvatar name={c.other.name} photoUrl={assetUrl(c.other.photo)} size={40} />
                 <span style={{ flex:1, minWidth:0 }}>
                   <span style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:8 }}>
@@ -372,13 +369,13 @@ export default function Messages({ t, lang, fmtAmt, openRequest, onOpenProduct, 
             <div role="alert" style={{ margin:"auto", fontFamily:FONT_SANS, fontSize:14, color:COLORS.inkSoft, padding:24, textAlign:"center" }}>
               {m.chatError}{" "}
               <button type="button" className="a-shop-link" style={{ fontWeight:700, color:COLORS.accentDark }} onClick={loadChat}>{m.retry}</button>
-              <div style={{ marginTop:12 }}><button type="button" className="a-shop-link msg-back" style={{ margin:"0 auto", color:COLORS.accentDark }} onClick={() => setActiveId(null)}>‹ {m.back}</button></div>
+              <div style={{ marginTop:12 }}><button type="button" className="a-shop-link msg-back" style={{ margin:"0 auto", color:COLORS.accentDark }} onClick={() => onSelect(null)}>‹ {m.back}</button></div>
             </div>
           ) : !chat ? (
             <p style={{ margin:"auto", fontFamily:FONT_SANS, color:COLORS.inkSoft }}>…</p>
           ) : (
             <Chat key={chat.id} t={t} lang={lang} chat={chat} fmtAmt={fmtAmt} navigate={navigate} onApiError={onApiError}
-              onOpenProduct={onOpenProduct} onOpenOrder={onOpenOrder} onBack={() => setActiveId(null)} onSent={sendMessage} onLoadOlder={loadOlder} />
+              onOpenProduct={onOpenProduct} onOpenOrder={onOpenOrder} onBack={() => onSelect(null)} onSent={sendMessage} onLoadOlder={loadOlder} />
           )}
         </section>
         </>}

@@ -146,9 +146,9 @@ test('relative times and in-app links', () => {
   expect(timeAgo(now - 2 * 3600000, n, now)).toBe('2 hours ago');
   expect(timeAgo(now - 3 * 86400000, n, now)).toBe('3 days ago');
 
-  expect(parseLink(`/orders/${ID}`)).toEqual({ orderId: ID });
-  expect(parseLink('/admin/shops')).toEqual({ page: 'admin-shops' });
-  expect(parseLink(`/products/${ID}`)).toEqual({ productId: ID });
+  expect(parseLink(`/orders/${ID}`)).toBe(`/orders/${ID}`);
+  expect(parseLink('/admin/shops')).toBe('/admin/shops');
+  expect(parseLink(`/products/${ID}`)).toBe(`/product/${ID}`); // stored by the server as /products/:id
   expect(parseLink(`/messages/${ID}`)).toBeNull(); // messages have no bell items
   for (const bad of ['https://evil.example', '//evil.example', 'javascript:alert(1)', '/orders/1', '/unknown', '', null]) {
     expect(parseLink(bad)).toBeNull();

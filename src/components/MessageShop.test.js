@@ -1,4 +1,5 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import App from '../App';
 import MessageShopButton, { messageShopMode } from './MessageShopButton';
 import Portfolio from './Portfolio';
@@ -33,6 +34,8 @@ function signIn(user, startResult = { status: 201, body: { conversation, created
     const reply = (body, status = 200) => Promise.resolve({ ok: status < 400, status, statusText: '', json: async () => body });
     if (path === '/products') return reply([product]);
     if (path === `/products/${product._id}/view`) return reply({});
+    if (path === `/products/${product._id}`) return reply(product);
+    if (path === `/artisans/${artisan._id}`) return reply(artisan);
     if (path === '/conversations' && method === 'POST') return reply(startResult.body, startResult.status);
     if (path === '/conversations') return reply({ conversations: [] });
     if (path === `/conversations/${CHAT}/messages`) return reply({ conversation, card: null, messages: [], hasMore: false });
@@ -148,14 +151,14 @@ test('logged out: the prompt replaces the button on both pages', () => {
   const shared = { lang: 'en', t, savedItems: [], toggleSave: () => {}, navigate: () => {}, viewer: null };
   const onSignIn = jest.fn(), onMessageShop = jest.fn();
   const { unmount } = render(
-    <ProductDetail {...shared} selected={{ ...product, id: product._id }} addToCart={() => {}} fmtAmt={String} openStorefront={() => {}} openArtisanProfile={() => {}} onSignIn={onSignIn} onMessageShop={onMessageShop} />
+    <MemoryRouter><ProductDetail {...shared} selected={{ ...product, id: product._id }} addToCart={() => {}} fmtAmt={String} openStorefront={() => {}} openArtisanProfile={() => {}} onSignIn={onSignIn} onMessageShop={onMessageShop} /></MemoryRouter>
   );
   expect(screen.queryByRole('button', { name: 'Message shop' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Sign in to message' }));
   expect(onSignIn).toHaveBeenCalledTimes(1);
   unmount();
 
-  render(<Portfolio {...shared} artisan={artisan} products={[]} openProduct={() => {}} fmtBasic={String} onBack={() => {}} onSignIn={onSignIn} onMessageShop={onMessageShop} />);
+  render(<MemoryRouter><Portfolio {...shared} artisan={artisan} products={[]} openProduct={() => {}} fmtBasic={String} onBack={() => {}} onSignIn={onSignIn} onMessageShop={onMessageShop} /></MemoryRouter>);
   expect(screen.queryByRole('button', { name: 'Message shop' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Sign in to message' }));
   expect(onSignIn).toHaveBeenCalledTimes(2);

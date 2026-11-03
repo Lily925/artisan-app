@@ -1,16 +1,14 @@
+import { Link } from "react-router-dom";
 import { COLORS, FONT_SERIF, FONT_SANS } from "../theme";
+import { PAGE_PATHS } from "../paths";
 
-export default function Footer({ t, navigate }) {
+export default function Footer({ t }) {
   const shop = t.shopPage;
 
   const link = (label, page) => (
-    <a
-      href="/"
-      onClick={(e) => { e.preventDefault(); navigate(page); }}
-      style={{ display:"block", fontFamily:FONT_SANS, fontSize:13, padding:"4px 0" }}
-    >
+    <Link to={PAGE_PATHS[page]} style={{ display:"block", fontFamily:FONT_SANS, fontSize:13, padding:"4px 0" }}>
       {label}
-    </a>
+    </Link>
   );
 
   return (

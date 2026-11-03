@@ -23,6 +23,7 @@ function signIn(user, notifications = { items: [], unreadCount: 0, unreadMessage
     const reply = (body) => Promise.resolve({ ok: true, status: 200, statusText: '', json: async () => body });
     if (path === '/products') return reply([product]);
     if (path === `/products/${product._id}`) return reply(product);
+    if (path === `/artisans/${artisan._id}`) return reply(artisan);
     if (path === '/notifications') return reply(notifications);
     if (path === '/cart') return reply({ items: [] });
     if (path === '/users/me') return reply(user);

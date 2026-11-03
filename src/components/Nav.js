@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { COLORS, FONT_SERIF } from "../theme";
 import { CartIcon, ChatIcon, HeartIcon } from "./NavIcons";
 import CountBadge from "./CountBadge";
@@ -15,14 +16,13 @@ export default function Nav({
   return (
     <header style={{ position:"sticky", top:0, zIndex:200, background:COLORS.card, borderBottom:`1px solid ${COLORS.border}` }}>
       <div className={`a-container a-nav-row${compact ? " compact" : ""}`}>
-        <a
-          href="/"
+        <Link
+          to="/"
           className="a-nav-brand"
-          onClick={(e) => { e.preventDefault(); navigate("home"); }}
           style={{ fontFamily:FONT_SERIF, fontSize:26, fontWeight:700, color:COLORS.ink, textDecoration:"none", flexShrink:0 }}
         >
           Artisan
-        </a>
+        </Link>
 
         <form role="search" className="a-search-form" onSubmit={(e) => { e.preventDefault(); onSearchSubmit(); }}>
           <label htmlFor="artisan-nav-search" className="a-sr-only">{nav.searchLabel}</label>
@@ -46,7 +46,7 @@ export default function Nav({
         </div>
 
         <div className="a-nav-group a-nav-icons" style={{ gap:0 }}>
-          {notifications && <NotificationBell t={t} notifications={notifications} fmtAmt={fmtAmt} onOpenLink={onOpenLink} />}
+          {notifications && <NotificationBell t={t} notifications={notifications} fmtAmt={fmtAmt} onOpenLink={onOpenLink} onOpenAll={() => navigate("notifications")} />}
 
           {/* Admins take no part in chats. */}
           {notifications && currentUser?.role !== "admin" && (

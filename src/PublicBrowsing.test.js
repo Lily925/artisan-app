@@ -31,6 +31,8 @@ beforeEach(() => {
     const signedIn = Boolean(options?.headers?.Authorization);
     if (path === '/products') return reply([product]);
     if (path === `/products/${product._id}/view`) return reply({});
+    if (path === `/products/${product._id}`) return reply(product);
+    if (path === `/artisans/${artisan._id}`) return reply(artisan);
     if (!signedIn) return reply({ error: 'Missing token' }, 401);
     if (path === '/notifications') return reply({ items: [], unreadCount: 0, unreadMessages: 0 });
     if (path === '/cart') return reply({ items: [] });

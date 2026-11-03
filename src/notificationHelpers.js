@@ -1,3 +1,5 @@
+import { orderPath, productPath } from "./paths";
+
 // Text and links for notifications: the server stores only a type and a few values.
 
 // "12 minutes ago" in the app's own MN/EN/KO wording (browsers differ in Mongolian support).
@@ -21,17 +23,17 @@ export function notificationText(t, notification, fmtAmt) {
 }
 
 const ID = "([0-9a-f]{24})";
-const PAGES = { "/my-commissions": "my-commissions", "/commission-board": "commission-board", "/profile": "profile", "/admin/shops": "admin-shops" };
+const PAGES = ["/my-commissions", "/commission-board", "/profile", "/admin/shops"];
 
-// In-app path -> where to go: { page }, { orderId } or { productId }. Null for anything
-// else, so a stored link can only ever open one of the app's own pages.
+// A stored link -> the app address to open. Null for anything else, so a stored link can
+// only ever open one of the app's own pages. The server stores products as /products/:id.
 export function parseLink(link) {
   if (typeof link !== "string") return null;
-  if (Object.hasOwn(PAGES, link)) return { page: PAGES[link] };
+  if (PAGES.includes(link)) return link;
   const order = new RegExp(`^/orders/${ID}$`).exec(link);
-  if (order) return { orderId: order[1] };
+  if (order) return orderPath(order[1]);
   const product = new RegExp(`^/products/${ID}$`).exec(link);
-  return product ? { productId: product[1] } : null;
+  return product ? productPath(product[1]) : null;
 }
 
 export const badgeText = (count) => (count > 9 ? "9+" : String(count));

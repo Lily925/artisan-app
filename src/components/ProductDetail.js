@@ -1,5 +1,8 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { COLORS, FONT_SERIF, FONT_SANS } from "../theme";
+import { PAGE_PATHS } from "../paths";
+import CopyLinkButton from "./CopyLinkButton";
 import { materialsByCat } from "../data";
 import { artisanInfo } from "../artisanInfo";
 import InstagramIcon from "./InstagramIcon";
@@ -10,7 +13,7 @@ import { bonusText, offeredTiers } from "../tiers";
 
 const TIER_DISPLAY = { basic: "Basic", story: "Story", patron: "Patron" };
 
-export default function ProductDetail({ lang, t, selected, savedItems, toggleSave, addToCart, fmtAmt, navigate, openStorefront, openArtisanProfile, currentUserId, canEdit = true, onEdit, onDelete, viewer = null, onMessageShop, onSignIn }) {
+export default function ProductDetail({ lang, t, selected, savedItems, toggleSave, addToCart, fmtAmt, openStorefront, openArtisanProfile, currentUserId, canEdit = true, onEdit, onDelete, viewer = null, onMessageShop, onSignIn }) {
   const [selectedTier, setSelectedTier] = useState("basic");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -43,7 +46,7 @@ export default function ProductDetail({ lang, t, selected, savedItems, toggleSav
     <div style={{ background:COLORS.bg, minHeight:"100vh" }}>
       <div className="a-page">
         <div className="a-breadcrumb">
-          <a href="/" onClick={(e) => { e.preventDefault(); navigate("shop"); }}>{d.breadcrumbShop}</a>
+          <Link to={PAGE_PATHS.shop}>{d.breadcrumbShop}</Link>
           {" / "}{categoryLabel}{" / "}
           <span style={{ color:COLORS.ink }}>{primaryName}</span>
         </div>
@@ -168,16 +171,14 @@ export default function ProductDetail({ lang, t, selected, savedItems, toggleSav
               </button>}
             </div>
 
+            <CopyLinkButton t={t} style={{ width:"100%", marginBottom:20 }} />
+
             <div className="a-callout" style={{ marginBottom:24 }}>
               <div style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:700, color:COLORS.ink, marginBottom:4 }}>{d.customCalloutTitle}</div>
               <div style={{ fontFamily:FONT_SANS, fontSize:12, color:COLORS.inkSoft, lineHeight:1.5, marginBottom:8 }}>{d.customCalloutBody}</div>
-              <a
-                href="/"
-                onClick={(e) => { e.preventDefault(); navigate("commission"); }}
-                style={{ fontFamily:FONT_SANS, fontSize:12, fontWeight:700, color:COLORS.accentDark, textDecoration:"none" }}
-              >
+              <Link to={PAGE_PATHS.commission} style={{ fontFamily:FONT_SANS, fontSize:12, fontWeight:700, color:COLORS.accentDark, textDecoration:"none" }}>
                 {d.customCalloutCta}
-              </a>
+              </Link>
             </div>
 
             <div className="a-two-col" style={{ gap:16 }}>

@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { BrowserRouter, Navigate, Outlet, Route, Routes, matchPath, useLocation, useNavigate, useParams } from "react-router-dom";
 import { COLORS, FONT_SERIF, FONT_SANS, THEME_CSS } from "./theme";
 import { i18n } from "./data";
 import { api, setToken, getToken, ApiError } from "./api";
@@ -25,6 +26,12 @@ import ProductCard from "./components/ProductCard";
 import { isOwnProduct } from "./artisanInfo";
 import { useNotifications } from "./useNotifications";
 import { parseLink } from "./notificationHelpers";
+import { PAGE_PATHS, artisanAboutPath, categoryPath, chatPath, editProductPath, orderPath, productPath, shopPath } from "./paths";
+import { NotAllowed, NotFound, PageLoading, PageTitle, RequireAuth, RequireRole, ScrollToTop } from "./components/Routing";
+import ProductRoute from "./components/ProductRoute";
+import ShopRoute from "./components/ShopRoute";
+import OrdersPage from "./components/OrdersPage";
+import NotificationsPage from "./components/NotificationsPage";
 
 // One switcher sets both: the UI language and the display currency that goes with it.
 // Money is always USD on the server; other currencies are a display-only conversion.
@@ -37,9 +44,6 @@ function savedLang() {
   } catch { return "en"; }
 }
 
-// What a logged-out visitor can see. Anything else asks them to sign in first, then goes there.
-const PUBLIC_PAGES = ["home", "shop", "detail", "storefront", "artisan-profile"];
-
 const SHOP_NAME = /^[\p{L}\p{N}][\p{L}\p{N} ._&'-]{1,59}$/u; // same rule as the server
 const SHOP_DESCRIPTION_MAX = 500;
 const AVATAR_BY_ROLE = { admin: "🧑‍💼", artisan: "👩‍🎨", buyer: "🛍" };
@@ -51,8 +55,8 @@ const DEMO_ACCOUNTS = process.env.NODE_ENV !== "production" ? [
   { name: "Buyer Demo", email: "buyer@artisan.mn", password: "artisan123" },
 ] : [];
 
-function LoginPage({ onLogin, onRegister, onBack, lang }) {
-  const [tab, setTab] = useState("login");
+// tab: "login" | "register", from the address (/signin, /signup).
+function LoginPage({ tab, onTab, onLogin, onRegister, onBack, lang }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -124,7 +128,7 @@ function LoginPage({ onLogin, onRegister, onBack, lang }) {
         <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:2, padding:"28px 24px", boxShadow:"0 8px 32px rgba(59,42,50,0.08)", marginBottom:14 }}>
           <div role="tablist" style={{ display:"flex", background:COLORS.bgSoft, border:`1px solid ${COLORS.border}`, borderRadius:2, padding:3, marginBottom:22 }}>
             {["login","register"].map(tb => (
-              <button key={tb} type="button" role="tab" aria-selected={tab===tb} onClick={() => { setTab(tb); setError(""); }} style={{ flex:1, padding:"10px 0", minHeight:44, border:"none", borderRadius:2, fontWeight:700, fontSize:14, cursor:"pointer", background:tab===tb?COLORS.card:"transparent", color:tab===tb?COLORS.accentDark:COLORS.inkSoft, boxShadow:tab===tb?"0 2px 8px rgba(59,42,50,0.08)":"none", transition:"all 0.2s" }}>
+              <button key={tb} type="button" role="tab" aria-selected={tab===tb} onClick={() => { onTab(tb); setError(""); }} style={{ flex:1, padding:"10px 0", minHeight:44, border:"none", borderRadius:2, fontWeight:700, fontSize:14, cursor:"pointer", background:tab===tb?COLORS.card:"transparent", color:tab===tb?COLORS.accentDark:COLORS.inkSoft, boxShadow:tab===tb?"0 2px 8px rgba(59,42,50,0.08)":"none", transition:"all 0.2s" }}>
                 {tb==="login"?lbl.login:lbl.register}
               </button>
             ))}
@@ -190,7 +194,7 @@ function LoginPage({ onLogin, onRegister, onBack, lang }) {
           </button>
           <div style={{ textAlign:"center", marginTop:16, fontSize:13, color:COLORS.inkSoft }}>
             {tab==="login"?lbl.noAcc:lbl.hasAcc}{" "}
-            <button type="button" className="a-shop-link" onClick={()=>setTab(tab==="login"?"register":"login")} style={{ display:"inline", color:COLORS.accentDark, fontWeight:700, fontSize:13 }}>{tab==="login"?lbl.register:lbl.login}</button>
+            <button type="button" className="a-shop-link" onClick={() => { onTab(tab==="login"?"register":"login"); setError(""); }} style={{ display:"inline", color:COLORS.accentDark, fontWeight:700, fontSize:13 }}>{tab==="login"?lbl.register:lbl.login}</button>
           </div>
         </div>
 
@@ -213,6 +217,12 @@ function LoginPage({ onLogin, onRegister, onBack, lang }) {
       </div>
     </div>
   );
+}
+
+// /orders/:orderId
+function OrderRoute({ startChat, ...props }) {
+  const { orderId } = useParams();
+  return <OrderDetail key={orderId} {...props} orderId={orderId} onMessage={() => startChat({ orderId })} />;
 }
 
 const CSS = `
@@ -272,43 +282,62 @@ const CSS = `
   .shop-tab-inactive{border-bottom:2.5px solid transparent;background:#faf9f7;}
 `;
 
-export default function App() {
+// /messages and /messages/:conversationId: the URL says which chat is open.
+function MessagesRoute(props) {
+  const { conversationId } = useParams();
+  const go = useNavigate();
+  return <Messages {...props} activeId={conversationId || null} onSelect={(id) => go(id ? chatPath(id) : PAGE_PATHS.messages)} />;
+}
+
+const LOGIN_PATHS = [PAGE_PATHS.login, PAGE_PATHS.signup];
+const SHOP_STATUS_PAGES = /^\/(profile|dashboard\/settings|dashboard\/products\/new|product\/[^/]+\/edit)$/;
+const searchSuffix = (q) => (q ? `?q=${encodeURIComponent(q)}` : "");
+
+function ArtisanApp() {
+  const location = useLocation();
+  const routerNavigate = useNavigate();
+  const { pathname } = location;
+  const pathRef = useRef(pathname);
+  pathRef.current = pathname;
+  const pageKey = location.key; // pages load fresh each time they're opened
+
   const [currentUser, setCurrentUser] = useState(() => {
     try { return getToken() ? JSON.parse(localStorage.getItem("artisan-user") || "null") : null; } catch { return null; }
   });
   const [lang, setLang] = useState(savedLang);
+  const t = i18n[lang];
   const currency = CURRENCY_BY_LANG[lang];
-  const [requestedPage, setPage] = useState("home");
-  // Logged out, only public pages and login can show; signed in, login has nothing to show.
-  const page = currentUser
-    ? (requestedPage === "login" ? "home" : requestedPage)
-    : (requestedPage === "login" || PUBLIC_PAGES.includes(requestedPage) ? requestedPage : "home");
-  const [loginReturn, setLoginReturn] = useState({ back: "home", after: "home" }); // where login's Back and success go
-  const [pageKey, setPageKey] = useState(0);
-  const [selected, setSelected] = useState(null);
-  const [storeArtisan, setStoreArtisan] = useState(null); // artisan whose storefront is open
   // An artisan account without a shop profile yet (new sign-up): sent to "Set up your shop".
   const [shopSetupNeeded, setShopSetupNeeded] = useState(false);
   // Own shop's approval: { status, reason }; status null = not loaded yet. Only "approved"
   // shops are public and can add or edit products (the server enforces this too).
   const [shopStatus, setShopStatus] = useState({ status: null, reason: "" });
-  const [profileArtisan, setProfileArtisan] = useState(null); // artisan whose personal profile is open
-  // Pages to return to from the storefront / artisan-profile pages ("Back" pops one).
-  const [backStack, setBackStack] = useState([]);
   // Ids of products the current user has liked (the heart). Loaded from the API per user.
   const [savedItems, setSavedItems] = useState([]);
+  const [likesLoaded, setLikesLoaded] = useState(false);
   const [products, setProducts] = useState([]);
-  // Shop category filter ("" = all) and the ids the API returned for it (null = not loaded yet).
-  const [shopCategory, setShopCategory] = useState("");
+  const [catalogReady, setCatalogReady] = useState(false);
+  // The ids the API returned for the category in the URL (null = not loaded yet).
   const [categoryIds, setCategoryIds] = useState(null);
   const [catalogVersion, setCatalogVersion] = useState(0); // bumped on every catalog reload
   const [cart, setCart] = useState(null);
   const [orders, setOrders] = useState([]);
-  const [orderView, setOrderView] = useState(null); // { id, back }: the order detail page and where "Back" goes
-  const [chatRequest, setChatRequest] = useState(null); // { id }: the conversation the Messages page should open
-  const [searchQuery, setSearchQuery] = useState("");
+  const [ordersLoaded, setOrdersLoaded] = useState(false);
+  const [searchQuery, setSearchQuery] = useState(() => new URLSearchParams(location.search).get("q") || "");
   const [toast, setToast] = useState(null);
   const [rates, setRates] = useState({ MNT: 3450, KRW: 1380 });
+
+  // /category/<anything else> is a 404 (below), not an empty list.
+  const routeCategory = matchPath("/category/:name", pathname)?.params.name ?? null;
+  const shopCategory = t.productCategories.some((c) => c.key === routeCategory) ? routeCategory : "";
+  // On the product lists the search lives in the URL (?q=), so it survives refresh and Back.
+  const onProductList = pathname === PAGE_PATHS.shop || routeCategory !== null;
+  const urlQuery = new URLSearchParams(location.search).get("q") || "";
+  useEffect(() => { if (onProductList) setSearchQuery(urlQuery); }, [onProductList, urlQuery]);
+  const updateSearch = (q) => {
+    setSearchQuery(q);
+    if (onProductList) routerNavigate({ search: searchSuffix(q) }, { replace: true });
+  };
 
   // Likes replaced the old browser-only wishlist; drop its leftover storage key.
   useEffect(() => { try { localStorage.removeItem("artisan-saved"); } catch {} }, []);
@@ -328,7 +357,8 @@ export default function App() {
   const refreshProducts = () =>
     api.getProducts()
       .then(list => { setProducts(list.map(p => ({ ...p, id: p._id }))); setCatalogVersion(v => v + 1); })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setCatalogReady(true));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { refreshProducts(); }, []);
 
@@ -347,22 +377,31 @@ export default function App() {
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2400); };
 
-  const logout = () => {
+  // Login ended. On a public page the visitor stays; a protected page goes to sign-in and
+  // comes back afterwards (see RequireAuth).
+  const clearSession = () => {
     setToken(null);
     localStorage.removeItem("artisan-user");
     setCurrentUser(null);
     setCart(null);
     setOrders([]);
-    setPage("home");
+  };
+  // The Logout button goes home: nothing to come back to.
+  const logout = () => {
+    clearSession();
+    routerNavigate(PAGE_PATHS.home);
   };
 
   const handleApiError = (err) => {
-    if (err instanceof ApiError && err.status === 401) { logout(); return; }
+    if (err instanceof ApiError && err.status === 401) { clearSession(); return; }
     showToast(err.message || "Something went wrong");
   };
 
-  const refreshCart = () => api.getCart().then(setCart).catch(handleApiError);
-  const refreshOrders = () => api.getOrders().then(setOrders).catch(handleApiError);
+  const refreshCart = () => api.getCart().then(setCart).catch((err) => {
+    handleApiError(err);
+    if (err.status !== 401) setCart((c) => c || { items: [] });
+  });
+  const refreshOrders = () => api.getOrders().then(setOrders).catch(handleApiError).finally(() => setOrdersLoaded(true));
 
   // Own profile changed (photo / bio): keep the stored copy in sync.
   const updateCurrentUser = (user) => {
@@ -376,31 +415,39 @@ export default function App() {
   const currentUserId = currentUser?.id;
   useEffect(() => {
     if (currentUserId) {
-      refreshCart(); refreshOrders(); api.getMyLikes().then(setSavedItems).catch(handleApiError);
+      refreshCart(); refreshOrders();
+      api.getMyLikes().then(setSavedItems).catch(handleApiError).finally(() => setLikesLoaded(true));
       api.getMe().then(updateCurrentUser).catch(handleApiError);
       if (currentUser.role === "artisan") {
         api.getMyArtisan()
           .then((a) => { setShopSetupNeeded(false); setShopStatus({ status: a.status || "approved", reason: a.statusReason || "" }); })
           .catch((err) => {
-            if (err.status !== 404) return handleApiError(err);
+            if (err.status !== 404) {
+              setShopStatus((s) => ({ ...s, status: s.status || "unknown" })); // pages stop waiting for it
+              return handleApiError(err);
+            }
             setShopSetupNeeded(true);
-            navigate("shop-setup");
+            // Signing in or arriving at home leads to setup. Any other address (a refresh, a
+            // shared link) stays put; shop pages show the setup form themselves.
+            if ([PAGE_PATHS.home, ...LOGIN_PATHS].includes(pathRef.current)) routerNavigate(PAGE_PATHS["shop-setup"], { replace: true });
           });
       } else setShopSetupNeeded(false);
     }
-    else { setCart(null); setOrders([]); setSavedItems([]); setShopSetupNeeded(false); setShopStatus({ status: null, reason: "" }); }
+    else {
+      setCart(null); setOrders([]); setOrdersLoaded(false); setSavedItems([]); setLikesLoaded(false);
+      setShopSetupNeeded(false); setShopStatus({ status: null, reason: "" });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUserId]);
 
   const notifications = useNotifications(Boolean(currentUserId), handleApiError);
 
+  // The sign-in route sees the new user and goes back to where they were heading.
   const handleLogin = async (email, password) => {
     const { token, user } = await api.login(email, password);
     setToken(token);
     localStorage.setItem("artisan-user", JSON.stringify(user));
     setCurrentUser(user);
-    setPage(loginReturn.after);
-    window.scrollTo(0, 0);
   };
   // accountType is only a request: the server accepts "buyer" or "artisan" and nothing else.
   // Artisans also send shop: { shopName, shopDescription }; the new shop waits for approval.
@@ -409,16 +456,8 @@ export default function App() {
     setToken(token);
     localStorage.setItem("artisan-user", JSON.stringify(user));
     setCurrentUser(user);
-    setPage(loginReturn.after);
-    window.scrollTo(0, 0);
   };
 
-  if (page === "login") return <LoginPage onLogin={handleLogin} onRegister={handleRegister} lang={lang} onBack={() => setPage(loginReturn.back)} />;
-
-  const t = i18n[lang];
-  // Shop pages can't work without a shop profile, so they show the setup form until it exists.
-  const SHOP_SETUP_GATED = ["shop-setup", "dashboard", "shop-orders", "shop-settings", "add-product", "edit-product"];
-  const showShopSetup = currentUser?.role === "artisan" && shopSetupNeeded && SHOP_SETUP_GATED.includes(page);
   const currentUserAvatar = AVATAR_BY_ROLE[currentUser?.role] || "🙂";
   const isArtisan = currentUser?.role === "artisan";
   const shopLive = isArtisan && !shopSetupNeeded && shopStatus.status === "approved";
@@ -428,13 +467,17 @@ export default function App() {
     api.getMyArtisan()
       .then((a) => setShopStatus({ status: a.status || "approved", reason: a.statusReason || "" }))
       .catch((err) => { if (err.status === 401) handleApiError(err); });
-  // Back returns to this page; signing in goes on to `after` (the page they were heading to).
-  const openLogin = (after = page) => { setLoginReturn({ back: page, after }); setPage("login"); window.scrollTo(0, 0); };
-  const navigate = (pg) => {
-    if (!currentUser && !PUBLIC_PAGES.includes(pg)) return openLogin(pg === "login" ? page : pg);
-    if (isArtisan && !shopSetupNeeded && ["profile", "add-product", "edit-product", "shop-settings"].includes(pg)) refreshShopStatus();
-    setPage(pg); setPageKey(k => k + 1);
-  };
+  useEffect(() => {
+    if (isArtisan && !shopSetupNeeded && SHOP_STATUS_PAGES.test(pathname)) refreshShopStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
+
+  // Signing in comes back to this page.
+  const openLogin = () => routerNavigate(PAGE_PATHS.login, { state: { from: pathname + location.search } });
+  // Components ask for a page by name; RequireAuth sends logged-out visitors to sign in.
+  const navigate = (pg) => (pg === "login" ? openLogin() : routerNavigate(PAGE_PATHS[pg] || PAGE_PATHS.home));
+  // Back within the app if there's somewhere to go; a shared link has nothing behind it.
+  const goBack = (fallback) => (window.history.state?.idx > 0 ? routerNavigate(-1) : routerNavigate(fallback, { replace: true }));
   // Heart = like. Flip the heart immediately, then take liked state + count from the server.
   const toggleSave = (id, e) => {
     if (e) e.stopPropagation();
@@ -446,7 +489,6 @@ export default function App() {
       .then(({ liked, likeCount }) => {
         setLiked(liked);
         setProducts(ps => ps.map(p => p.id === id ? { ...p, likeCount } : p));
-        setSelected(sel => sel && sel.id === id ? { ...sel, likeCount } : sel);
       })
       .catch((err) => { setLiked(wasLiked); handleApiError(err); });
   };
@@ -464,72 +506,41 @@ export default function App() {
   const removeFromCart = (productId, tier) =>
     api.removeCartItem(productId, tier).then(setCart).catch(handleApiError);
   // After PayPal capture: the server has created the paid order and emptied those cart lines.
+  // Replaces /checkout, so Back can't return to a payment form for a paid order.
   const onPaid = (orderId) =>
-    Promise.all([refreshCart(), refreshOrders()]).then(() => { showToast(t.paypal.paid); openOrder(orderId); });
-  const openOrder = (id, back = "profile") => { setOrderView({ id, back }); navigate("order-detail"); window.scrollTo(0, 0); };
+    Promise.all([refreshCart(), refreshOrders()]).then(() => { showToast(t.paypal.paid); routerNavigate(orderPath(orderId), { replace: true }); });
+  const openOrder = (id) => routerNavigate(orderPath(id));
   // A notification's in-app link. Anything unknown stays on the current page.
   const openLink = (link) => {
-    const target = parseLink(link);
-    if (!target) return;
-    if (target.orderId) openOrder(target.orderId);
-    else if (target.productId) openProductById(target.productId);
-    else if (target.page) { navigate(target.page); window.scrollTo(0, 0); }
+    const path = parseLink(link);
+    if (path) routerNavigate(path);
   };
-  const openChat = (id) => { setChatRequest({ id }); navigate("messages"); window.scrollTo(0, 0); };
   // The inbox itself (header, profile): not whichever chat was opened last.
-  const openInbox = () => { setChatRequest(null); navigate("messages"); window.scrollTo(0, 0); };
+  const openInbox = () => routerNavigate(PAGE_PATHS.messages);
   // "Message shop" / "Message the artisan" / "Message the buyer". target: { shopId } | { productId } | { orderId }
   const startChat = (target) =>
     api.startConversation(target)
-      .then(({ conversation }) => openChat(conversation.id))
+      .then(({ conversation }) => routerNavigate(chatPath(conversation.id)))
       .catch((err) => {
         if (err.status === 401) return handleApiError(err);
         return showToast(t.messages.errors[err.code] || t.messages.errors.generic);
       });
-  // From a chat's product card: read it fresh, it may not be in the loaded catalog.
-  const openProductById = (id) =>
-    api.getProduct(id)
-      .then((p) => { openProduct({ ...p, id: p._id }); window.scrollTo(0, 0); })
-      .catch((err) => (err.status === 401 ? handleApiError(err) : showToast(t.messages.errors.generic)));
 
   const submitCommission = (data) =>
     api.createCommission(data).catch((err) => {
-      if (err instanceof ApiError && err.status === 401) { logout(); }
+      if (err instanceof ApiError && err.status === 401) { clearSession(); }
       throw err;
     });
 
-  const openProduct = (p) => {
-    setSelected(p);
-    navigate("detail");
-    // Feeds the owning artisan's dashboard; the server ignores repeats and owner views.
-    api.recordView(p.id).catch(() => {});
-  };
-
-  // Shop page (products) and personal profile page for one artisan. Moving between
-  // these two pushes onto backStack; arriving from anywhere else starts a fresh stack,
-  // so "Back" always unwinds to where the visitor came from (no shop <-> profile loop).
-  const ARTISAN_PAGES = ["storefront", "artisan-profile"];
-  const openArtisanPage = (target) => {
-    setBackStack(s => ARTISAN_PAGES.includes(page) ? [...s, page] : [page]);
-    navigate(target);
-    window.scrollTo(0, 0);
-  };
-  const openStorefront = (artisan) => {
-    if (!artisan?._id) return;
-    setStoreArtisan(artisan);
-    openArtisanPage("storefront");
-  };
-  const openArtisanProfile = (artisan) => {
-    if (!artisan?._id) return;
-    setProfileArtisan(artisan);
-    openArtisanPage("artisan-profile");
-  };
+  const openProduct = (p) => routerNavigate(productPath(p.id));
+  const openStorefront = (artisan) => { if (artisan?._id) routerNavigate(shopPath(artisan)); };
+  const openArtisanProfile = (artisan) => { if (artisan?._id) routerNavigate(artisanAboutPath(artisan)); };
   // ── Artisan's own products ──
+  // Replaces the form, so Back doesn't reopen it.
   const showSavedProduct = (product, message) => {
     showToast(message);
     refreshProducts();
-    openProduct({ ...product, id: product._id });
-    window.scrollTo(0, 0);
+    routerNavigate(productPath(product._id), { replace: true });
   };
   // Returns the promise so the detail page can show "Deleting…" until it settles.
   const deleteOwnProduct = (p) =>
@@ -539,32 +550,19 @@ export default function App() {
         setSavedItems(s => s.filter(x => x !== p.id));
         refreshProducts();
         refreshCart();
-        // Land on the shop the product was in; fresh back stack so "Back" can't
-        // return to the deleted product's page.
-        setStoreArtisan(p.artisan);
-        setBackStack(["shop"]);
-        navigate("storefront");
-        window.scrollTo(0, 0);
+        // Land on the shop the product was in; replaced so Back can't return to the deleted product.
+        routerNavigate(shopPath(p.artisan), { replace: true });
       })
       .catch(handleApiError);
 
-  const goBack = () => {
-    const prev = backStack[backStack.length - 1] || "shop";
-    setBackStack(s => s.slice(0, -1));
-    navigate(prev);
-  };
-  // Prefer the freshest copy of an artisan (products reload after a profile edit).
-  const liveArtisan = (a) => (a && products.find(p => p.artisan?._id === a._id)?.artisan) || a;
   // The API also returns an artisan's own hidden products (isHidden) to that artisan, so
   // they can still open them; every public list leaves them out.
   // Same for the artisan's own products while their shop isn't approved.
   const publicProducts = products.filter(p => !p.isHidden && (!p.artisan?.status || p.artisan.status === "approved"));
   // For an empty inbox: shops with something to ask about, one per shop.
   const suggestedShops = [...new Map(publicProducts.filter(p => p.artisan?._id).map(p => [p.artisan._id, p.artisan])).values()].slice(0, 4);
-  const storeArtisanLive = liveArtisan(storeArtisan);
-  const profileArtisanLive = liveArtisan(profileArtisan);
 
-  const openShop = (category = "") => { setShopCategory(category); navigate("shop"); };
+  const openShop = (category = "") => routerNavigate(categoryPath(category) + searchSuffix(searchQuery));
   const categoryLoading = Boolean(shopCategory) && categoryIds === null;
   const filtered = publicProducts.filter(p => {
     if (shopCategory && !categoryIds?.includes(p.id)) return false;
@@ -586,210 +584,267 @@ export default function App() {
   };
   const fmtBasic = (p) => fmtAmt(p.pricingTiers.basic.price);
   const cartCount = cart?.items?.reduce((s, i) => s + i.qty, 0) || 0;
+  const productName = (p) => (lang === "mn" ? p.title : p.titleEn || p.title);
 
-  return (
-    <div style={{ fontFamily:"'Helvetica Neue',Arial,sans-serif", background: COLORS.bg, minHeight:"100vh", color:"#222" }}>
-      <style>{CSS}</style>
-      <style>{THEME_CSS}</style>
-
-      <Nav
-        lang={lang} setLang={setLang}
-        searchQuery={searchQuery} setSearchQuery={setSearchQuery}
-        onSearchSubmit={() => navigate("shop")}
-        cartCount={cartCount} wishlistCount={savedItems.length}
-        currentUser={currentUser && { ...currentUser, avatar: currentUserAvatar }} navigate={navigate} t={t}
-        notifications={currentUser ? notifications : null} fmtAmt={fmtAmt} onOpenLink={openLink} onOpenInbox={openInbox} compact={page==="messages"}
-      />
-
-      {isArtisan && !shopSetupNeeded && <ShopStatusBanner t={t} status={shopStatus.status} reason={shopStatus.reason} />}
-
-      {/* ── TOAST ── */}
-      {toast && (
-        <div style={{ position:"fixed", top:76, left:"50%", background:"#1c1c1c", color:"white", padding:"10px 20px", borderRadius:30, fontSize:13, fontWeight:500, zIndex:999, whiteSpace:"nowrap", boxShadow:"0 6px 24px rgba(0,0,0,0.22)", display:"flex", alignItems:"center", gap:8, animation:"toastIn 0.25s ease forwards" }}>
-          <span style={{ fontSize:14, animation:"checkBounce 0.4s ease 0.1s both", display:"inline-block" }}>✓</span>
-          {toast}
-        </div>
-      )}
-
-      {/* ── HOME ── */}
-      {page==="home" && (
-        <Home
-          lang={lang} t={t} prods={publicProducts} currentUserId={currentUser?.id}
-          savedItems={savedItems} toggleSave={toggleSave} openProduct={openProduct}
-          fmt={fmtBasic} navigate={navigate} openShop={openShop}
-        />
-      )}
-
-      {page==="shop" && (
-        <Shop
-          lang={lang} t={t} filtered={filtered} loading={categoryLoading} currentUserId={currentUser?.id}
-          category={shopCategory} openShop={openShop}
-          searchQuery={searchQuery} clearSearch={() => setSearchQuery("")}
-          savedItems={savedItems} toggleSave={toggleSave} openProduct={openProduct}
-          fmt={fmtBasic} navigate={navigate}
-        />
-      )}
-
-      {page==="detail" && selected && (
-        <ProductDetail
-          lang={lang} t={t} selected={selected} savedItems={savedItems}
-          toggleSave={toggleSave} addToCart={addToCart} fmtAmt={fmtAmt}
-          navigate={navigate} openStorefront={openStorefront} openArtisanProfile={openArtisanProfile}
-          currentUserId={currentUser?.id} canEdit={shopLive}
-          viewer={currentUser} onMessageShop={() => startChat({ productId: selected.id })} onSignIn={() => navigate("login")}
-          onEdit={() => { navigate("edit-product"); window.scrollTo(0, 0); }}
-          onDelete={deleteOwnProduct}
-        />
-      )}
-
-      {/* Shop page and personal profile are one portfolio page; "artisan-profile" opens it at About. */}
-      {ARTISAN_PAGES.includes(page) && (page==="storefront" ? storeArtisanLive : profileArtisanLive) && (() => {
-        const a = page==="storefront" ? storeArtisanLive : profileArtisanLive;
-        return (
+  // ── Route elements ──
+  const page = (title, element) => <><PageTitle title={title} />{element}</>;
+  const signedIn = (title, element) => <RequireAuth user={currentUser}>{page(title, element)}</RequireAuth>;
+  const forRoles = (roles, title, element) => <RequireRole user={currentUser} roles={roles} t={t}>{page(title, element)}</RequireRole>;
+  // Shop pages can't work without a shop profile, so they show the setup form until it exists.
+  const shopSetupForm = (
+    <ShopSetup
+      key={pageKey} t={t} onApiError={handleApiError}
+      onDone={(artisan) => { setShopSetupNeeded(false); setShopStatus({ status: artisan?.status || "pending", reason: "" }); showToast(t.shopSetup.done); refreshProducts(); navigate("profile"); }}
+    />
+  );
+  const shopChecked = shopSetupNeeded || shopStatus.status !== null;
+  const artisanPage = (title, element) => forRoles(["artisan"], shopSetupNeeded ? t.shopSetup.title : title,
+    !shopChecked ? <PageLoading /> : shopSetupNeeded ? shopSetupForm : element);
+  const cantPublish = (
+    <div className="a-page page">
+      <p role="status" style={{ fontFamily:FONT_SANS, fontSize:15, color:COLORS.ink, marginTop:12 }}>{t.shopStatus.cantPublish}</p>
+      <button type="button" className="a-btn-outline" style={{ marginTop:16 }} onClick={() => navigate("profile")}>{t.profile}</button>
+    </div>
+  );
+  const cartPage = (checkout) => (
+    <Cart
+      lang={lang} t={t} cart={cart} checkout={checkout} onUpdateQty={updateQty} onRemove={removeFromCart}
+      onPaid={onPaid} onApiError={handleApiError} fmtAmt={fmtAmt} fmtUsd={fmtUsd} currency={currency} navigate={navigate}
+    />
+  );
+  const shopList = (
+    <Shop
+      lang={lang} t={t} filtered={filtered} loading={categoryLoading} currentUserId={currentUser?.id}
+      category={shopCategory} openShop={openShop}
+      searchQuery={searchQuery} clearSearch={() => updateSearch("")}
+      savedItems={savedItems} toggleSave={toggleSave}
+      fmt={fmtBasic} navigate={navigate}
+    />
+  );
+  // Shop page and personal profile are one portfolio page; "about" opens it at About.
+  const shopPage = (about) => (
+    <ShopRoute t={t} about={about} products={products} catalogReady={catalogReady}>
+      {(a) => (
+        <>
+          <PageTitle title={a.shopName || a.user?.name} />
           <Portfolio
-            key={`${page}-${a._id}`} lang={lang} t={t} artisan={a}
+            key={`${about}-${a._id}`} lang={lang} t={t} artisan={a}
             products={publicProducts.filter(p => p.artisan?._id === a._id)}
             savedItems={savedItems} toggleSave={toggleSave} openProduct={openProduct}
-            fmtBasic={fmtBasic} navigate={navigate} onBack={goBack}
-            focus={page==="artisan-profile" ? "about" : undefined}
-            viewer={currentUser} onMessageShop={() => startChat({ shopId: a._id })} onSignIn={() => navigate("login")}
+            fmtBasic={fmtBasic} navigate={navigate} onBack={() => goBack(PAGE_PATHS.shop)}
+            focus={about ? "about" : undefined}
+            viewer={currentUser} onMessageShop={() => startChat({ shopId: a._id })} onSignIn={openLogin}
           />
-        );
-      })()}
-
-      {page==="cart" && (
-        <Cart
-          lang={lang} t={t} cart={cart} onUpdateQty={updateQty} onRemove={removeFromCart}
-          onPaid={onPaid} onApiError={handleApiError} fmtAmt={fmtAmt} fmtUsd={fmtUsd} currency={currency} navigate={navigate}
-        />
+        </>
       )}
+    </ShopRoute>
+  );
+  const loginPage = (tab, title) => (currentUser
+    ? <Navigate to={location.state?.from || PAGE_PATHS.home} replace />
+    : page(title, <LoginPage tab={tab} onTab={(next) => routerNavigate(PAGE_PATHS[next === "register" ? "signup" : "login"], { replace: true, state: location.state })}
+        onLogin={handleLogin} onRegister={handleRegister} lang={lang} onBack={() => goBack(PAGE_PATHS.home)} />));
 
-      {page==="commission" && (
-        <ReverseAuction t={t} navigate={navigate} onSubmit={submitCommission} isArtisan={currentUser.role==="artisan"} />
-      )}
+  return (
+    <Routes>
+      <Route path={PAGE_PATHS.login} element={loginPage("login", t.routing.signIn)} />
+      <Route path={PAGE_PATHS.signup} element={loginPage("register", t.routing.signUp)} />
 
-      {page==="commission-board" && ["artisan","admin"].includes(currentUser.role) && (
-        <CommissionBoard
-          key={pageKey} t={t} fmtAmt={fmtAmt} canBid={currentUser.role==="artisan"}
-          onApiError={handleApiError} showToast={showToast}
-        />
-      )}
+      <Route element={
+        <div style={{ fontFamily:"'Helvetica Neue',Arial,sans-serif", background: COLORS.bg, minHeight:"100vh", color:"#222" }}>
+          <style>{CSS}</style>
+          <style>{THEME_CSS}</style>
 
-      {showShopSetup && (
-        <ShopSetup
-          key={pageKey} t={t} onApiError={handleApiError}
-          onDone={(artisan) => { setShopSetupNeeded(false); setShopStatus({ status: artisan?.status || "pending", reason: "" }); showToast(t.shopSetup.done); refreshProducts(); navigate("profile"); window.scrollTo(0, 0); }}
-        />
-      )}
+          <Nav
+            lang={lang} setLang={setLang}
+            searchQuery={searchQuery} setSearchQuery={updateSearch}
+            onSearchSubmit={() => routerNavigate((routeCategory !== null ? pathname : PAGE_PATHS.shop) + searchSuffix(searchQuery))}
+            cartCount={cartCount} wishlistCount={savedItems.length}
+            currentUser={currentUser && { ...currentUser, avatar: currentUserAvatar }} navigate={navigate} t={t}
+            notifications={currentUser ? notifications : null} fmtAmt={fmtAmt} onOpenLink={openLink} onOpenInbox={openInbox} compact={pathname.startsWith(PAGE_PATHS.messages)}
+          />
 
-      {page==="dashboard" && currentUser.role==="artisan" && !showShopSetup && (
-        <Dashboard
-          key={pageKey} t={t} lang={lang} fmtAmt={fmtAmt} fmtUsd={fmtUsd} currency={currency}
-          navigate={navigate} onApiError={handleApiError}
-        />
-      )}
+          {isArtisan && !shopSetupNeeded && <ShopStatusBanner t={t} status={shopStatus.status} reason={shopStatus.reason} />}
 
-      {page==="order-detail" && orderView && (
-        <OrderDetail
-          key={orderView.id} t={t} lang={lang} orderId={orderView.id} fmtAmt={fmtAmt}
-          onBack={() => navigate(orderView.back)} onApiError={handleApiError} showToast={showToast}
-          onChanged={refreshOrders} onMessage={() => startChat({ orderId: orderView.id })}
-        />
-      )}
+          {/* ── TOAST ── */}
+          {toast && (
+            <div style={{ position:"fixed", top:76, left:"50%", background:"#1c1c1c", color:"white", padding:"10px 20px", borderRadius:30, fontSize:13, fontWeight:500, zIndex:999, whiteSpace:"nowrap", boxShadow:"0 6px 24px rgba(0,0,0,0.22)", display:"flex", alignItems:"center", gap:8, animation:"toastIn 0.25s ease forwards" }}>
+              <span style={{ fontSize:14, animation:"checkBounce 0.4s ease 0.1s both", display:"inline-block" }}>✓</span>
+              {toast}
+            </div>
+          )}
 
-      {page==="shop-orders" && currentUser.role==="artisan" && !showShopSetup && (
-        <ShopOrders key={pageKey} t={t} fmtAmt={fmtAmt} navigate={navigate} openOrder={openOrder} onApiError={handleApiError} />
-      )}
-
-      {page==="my-commissions" && (
-        <MyCommissions
-          key={pageKey} t={t} fmtAmt={fmtAmt} navigate={navigate}
-          onApiError={handleApiError} showToast={showToast}
-        />
-      )}
-
-      {page==="shop-settings" && currentUser.role==="artisan" && !showShopSetup && (
-        <ArtisanProfileForm
-          key={pageKey} t={t} navigate={navigate} onApiError={handleApiError} canAddProducts={shopLive} showToast={showToast}
-          onSaved={() => { showToast(t.shopSettings.saved); refreshProducts(); }}
-        />
-      )}
-
-      {["add-product", "edit-product"].includes(page) && isArtisan && !showShopSetup && !shopLive && shopStatus.status && (
-        <div className="a-page page">
-          <p role="status" style={{ fontFamily:FONT_SANS, fontSize:15, color:COLORS.ink, marginTop:12 }}>{t.shopStatus.cantPublish}</p>
-          <button type="button" className="a-btn-outline" style={{ marginTop:16 }} onClick={() => navigate("profile")}>{t.profile}</button>
+          <Outlet />
         </div>
-      )}
-
-      {page==="messages" && currentUser.role!=="admin" && (
-        <Messages
-          t={t} lang={lang} fmtAmt={fmtAmt} openRequest={chatRequest} navigate={navigate} onApiError={handleApiError}
-          onOpenProduct={openProductById} onOpenOrder={(id) => openOrder(id, "messages")}
-          role={currentUser.role} suggestedShops={suggestedShops} onStartChat={(shopId) => startChat({ shopId })}
-        />
-      )}
-
-      {page==="admin-shops" && currentUser.role==="admin" && (
-        <AdminShops key={pageKey} t={t} lang={lang} onApiError={handleApiError} showToast={showToast} />
-      )}
-
-      {page==="add-product" && isArtisan && !showShopSetup && shopLive && (
-        <AddProductForm
-          key={pageKey} t={t} rateMnt={rates.MNT} onApiError={handleApiError}
-          onBack={() => navigate("shop-settings")}
-          onSaved={(product) => showSavedProduct(product, t.addProduct.created)}
-        />
-      )}
-
-      {page==="edit-product" && shopLive && !showShopSetup && selected && selected.artisan?.user?._id === currentUser.id && (
-        <AddProductForm
-          key={pageKey} t={t} product={selected} rateMnt={rates.MNT} onApiError={handleApiError}
-          onBack={() => navigate("detail")}
-          onSaved={(product) => showSavedProduct(product, t.addProduct.updated)}
-        />
-      )}
-
-      {/* ── SAVED ── */}
-      {page==="saved" && (
-        <div style={{ background:COLORS.bg, minHeight:"100vh" }}>
-          <div className="a-page page" key={pageKey}>
-            <h1 style={{ fontFamily:FONT_SERIF, fontSize:30, fontWeight:600, color:COLORS.ink, marginBottom:24 }}>
-              {t.saved} <span style={{ fontFamily:FONT_SANS, fontWeight:400, color:COLORS.inkSoft, fontSize:16 }}>({savedItems.length})</span>
-            </h1>
-            {savedItems.length===0 ? (
-              <div style={{ textAlign:"center", padding:"64px 0", fontFamily:FONT_SANS }}>
-                <div style={{ fontSize:52, marginBottom:14 }}>🤍</div>
-                <div style={{ fontFamily:FONT_SERIF, fontSize:20, color:COLORS.ink, marginBottom:6 }}>{t.savedEmpty}</div>
-                <div style={{ fontSize:13, color:COLORS.inkSoft, marginBottom:24 }}>{t.savedHint}</div>
-                <button type="button" className="a-btn-primary" onClick={() => navigate("home")}>{t.browseItems}</button>
-              </div>
-            ) : (
-              <div className="a-product-grid">
-                {products.filter(p => savedItems.includes(p.id)).map(p => (
-                  <ProductCard
-                    key={p.id} product={p} nameMn={p.title} nameEn={p.titleEn} lang={lang}
-                    isOwn={isOwnProduct(p, currentUser?.id)} isSaved onToggleSave={toggleSave} onOpen={openProduct} price={fmtBasic(p)}
-                    certifiedLabel={t.homePage.certified} wishlistAddLabel={t.homePage.wishlistAdd} wishlistRemoveLabel={t.homePage.wishlistRemove}
-                  />
-                ))}
-              </div>
+      }>
+        {/* ── Public: shareable, no login needed ── */}
+        <Route path={PAGE_PATHS.home} element={page(null,
+          <Home
+            lang={lang} t={t} prods={publicProducts} currentUserId={currentUser?.id}
+            savedItems={savedItems} toggleSave={toggleSave}
+            fmt={fmtBasic} navigate={navigate} openShop={openShop}
+          />
+        )} />
+        <Route path={PAGE_PATHS.shop} element={page(t.detailPage.breadcrumbShop, shopList)} />
+        <Route path="/category/:name" element={shopCategory
+          ? page(t.productCategories.find((c) => c.key === shopCategory).label, shopList)
+          : <NotFound t={t} />} />
+        <Route path="/shop/:slug" element={shopPage(false)} />
+        <Route path="/shop/:slug/about" element={shopPage(true)} />
+        <Route path="/product/:id" element={
+          <ProductRoute t={t} products={products} viewerId={currentUser?.id} onApiError={handleApiError}
+            onLoaded={(id) => api.recordView(id).catch(() => {})}>
+            {(selected) => (
+              <>
+                <PageTitle title={productName(selected)} />
+                <ProductDetail
+                  key={selected.id} lang={lang} t={t} selected={selected} savedItems={savedItems}
+                  toggleSave={toggleSave} addToCart={addToCart} fmtAmt={fmtAmt}
+                  openStorefront={openStorefront} openArtisanProfile={openArtisanProfile}
+                  currentUserId={currentUser?.id} canEdit={shopLive}
+                  viewer={currentUser} onMessageShop={() => startChat({ productId: selected.id })} onSignIn={openLogin}
+                  onEdit={() => routerNavigate(editProductPath(selected.id))}
+                  onDelete={deleteOwnProduct}
+                />
+              </>
             )}
-          </div>
-        </div>
-      )}
+          </ProductRoute>
+        } />
 
-      {/* ── PROFILE ── */}
-      {page==="profile" && (
-        <ProfilePage
-          key={pageKey} t={t} lang={lang} user={currentUser} emoji={currentUserAvatar}
-          products={products} savedItems={savedItems} toggleSave={toggleSave} openProduct={openProduct}
-          fmtBasic={fmtBasic} fmtAmt={fmtAmt} cartLines={cart?.items?.length || 0}
-          orders={orders} openOrder={openOrder} navigate={navigate} logout={logout} shopSetupNeeded={shopSetupNeeded} shopLive={shopLive}
-          onApiError={handleApiError} unreadMessages={notifications.unreadMessages} onOpenInbox={openInbox}
-          onUpdated={(user) => { updateCurrentUser(user); if (currentUser.role === "artisan") refreshProducts(); }}
-        />
-      )}
-    </div>
+        {/* ── Any signed-in account ── */}
+        <Route path={PAGE_PATHS.cart} element={signedIn(t.cart, cart ? cartPage(false) : <PageLoading />)} />
+        <Route path={PAGE_PATHS.checkout} element={signedIn(t.routing.checkoutTitle, cart ? cartPage(true) : <PageLoading />)} />
+        <Route path={PAGE_PATHS.orders} element={signedIn(t.orders.historyTitle,
+          <OrdersPage t={t} orders={orders} loaded={ordersLoaded} fmtAmt={fmtAmt} openOrder={openOrder} />
+        )} />
+        <Route path="/orders/:orderId" element={signedIn(t.orders.title,
+          <OrderRoute
+            t={t} lang={lang} fmtAmt={fmtAmt}
+            onBack={() => goBack(PAGE_PATHS.orders)} onApiError={handleApiError} showToast={showToast}
+            onChanged={refreshOrders} startChat={startChat}
+          />
+        )} />
+        <Route path={PAGE_PATHS.notifications} element={signedIn(t.notifications.title,
+          <NotificationsPage t={t} notifications={notifications} fmtAmt={fmtAmt} onOpenLink={openLink} />
+        )} />
+        <Route path={PAGE_PATHS.saved} element={signedIn(t.saved,
+          <div style={{ background:COLORS.bg, minHeight:"100vh" }}>
+            <div className="a-page page" key={pageKey}>
+              <h1 style={{ fontFamily:FONT_SERIF, fontSize:30, fontWeight:600, color:COLORS.ink, marginBottom:24 }}>
+                {t.saved} <span style={{ fontFamily:FONT_SANS, fontWeight:400, color:COLORS.inkSoft, fontSize:16 }}>({savedItems.length})</span>
+              </h1>
+              {!likesLoaded ? (
+                <p role="status" style={{ fontFamily:FONT_SANS, fontSize:14, color:COLORS.inkSoft }}>…</p>
+              ) : savedItems.length===0 ? (
+                <div style={{ textAlign:"center", padding:"64px 0", fontFamily:FONT_SANS }}>
+                  <div style={{ fontSize:52, marginBottom:14 }}>🤍</div>
+                  <div style={{ fontFamily:FONT_SERIF, fontSize:20, color:COLORS.ink, marginBottom:6 }}>{t.savedEmpty}</div>
+                  <div style={{ fontSize:13, color:COLORS.inkSoft, marginBottom:24 }}>{t.savedHint}</div>
+                  <button type="button" className="a-btn-primary" onClick={() => navigate("home")}>{t.browseItems}</button>
+                </div>
+              ) : (
+                <div className="a-product-grid">
+                  {products.filter(p => savedItems.includes(p.id)).map(p => (
+                    <ProductCard
+                      key={p.id} product={p} nameMn={p.title} nameEn={p.titleEn} lang={lang}
+                      isOwn={isOwnProduct(p, currentUser?.id)} isSaved onToggleSave={toggleSave} price={fmtBasic(p)}
+                      certifiedLabel={t.homePage.certified} wishlistAddLabel={t.homePage.wishlistAdd} wishlistRemoveLabel={t.homePage.wishlistRemove}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )} />
+        <Route path={PAGE_PATHS.profile} element={signedIn(t.profile,
+          <ProfilePage
+            key={pageKey} t={t} lang={lang} user={currentUser} emoji={currentUserAvatar}
+            products={products} savedItems={savedItems} toggleSave={toggleSave}
+            fmtBasic={fmtBasic} fmtAmt={fmtAmt} cartLines={cart?.items?.length || 0}
+            orders={orders} openOrder={openOrder} navigate={navigate} logout={logout} shopSetupNeeded={shopSetupNeeded} shopLive={shopLive}
+            onApiError={handleApiError} unreadMessages={notifications.unreadMessages} onOpenInbox={openInbox}
+            onUpdated={(user) => { updateCurrentUser(user); if (currentUser.role === "artisan") refreshProducts(); }}
+          />
+        )} />
+        <Route path={PAGE_PATHS.commission} element={signedIn(t.commission,
+          <ReverseAuction t={t} navigate={navigate} onSubmit={submitCommission} isArtisan={isArtisan} />
+        )} />
+        <Route path={PAGE_PATHS["my-commissions"]} element={signedIn(t.commissions.mineTitle,
+          <MyCommissions
+            key={pageKey} t={t} fmtAmt={fmtAmt} navigate={navigate}
+            onApiError={handleApiError} showToast={showToast}
+          />
+        )} />
+
+        {/* ── Admins take no part in chats ── */}
+        <Route path="/messages/:conversationId?" element={forRoles(["buyer", "artisan"], t.messages.title,
+          <MessagesRoute
+            t={t} lang={lang} fmtAmt={fmtAmt} navigate={navigate} onApiError={handleApiError}
+            onOpenProduct={(id) => routerNavigate(productPath(id))} onOpenOrder={openOrder}
+            role={currentUser?.role} suggestedShops={suggestedShops} onStartChat={(shopId) => startChat({ shopId })}
+          />
+        )} />
+
+        {/* ── By role ── */}
+        <Route path={PAGE_PATHS["commission-board"]} element={forRoles(["artisan", "admin"], t.commissions.boardTitle,
+          <CommissionBoard
+            key={pageKey} t={t} fmtAmt={fmtAmt} canBid={isArtisan}
+            onApiError={handleApiError} showToast={showToast}
+          />
+        )} />
+        <Route path={PAGE_PATHS["shop-setup"]} element={forRoles(["artisan"], t.shopSetup.title,
+          !shopChecked ? <PageLoading /> : shopSetupNeeded ? shopSetupForm : <Navigate to={PAGE_PATHS.profile} replace />
+        )} />
+        <Route path={PAGE_PATHS.dashboard} element={artisanPage(t.dashboard.title,
+          <Dashboard
+            key={pageKey} t={t} lang={lang} fmtAmt={fmtAmt} fmtUsd={fmtUsd} currency={currency}
+            navigate={navigate} onApiError={handleApiError}
+          />
+        )} />
+        <Route path={PAGE_PATHS["shop-orders"]} element={artisanPage(t.orders.shopTitle,
+          <ShopOrders key={pageKey} t={t} fmtAmt={fmtAmt} navigate={navigate} openOrder={openOrder} onApiError={handleApiError} />
+        )} />
+        <Route path={PAGE_PATHS["shop-settings"]} element={artisanPage(t.shopSettings.title,
+          <ArtisanProfileForm
+            key={pageKey} t={t} navigate={navigate} onApiError={handleApiError} canAddProducts={shopLive} showToast={showToast}
+            onSaved={() => { showToast(t.shopSettings.saved); refreshProducts(); }}
+          />
+        )} />
+        <Route path={PAGE_PATHS["add-product"]} element={artisanPage(t.addProduct.title, !shopLive ? cantPublish :
+          <AddProductForm
+            key={pageKey} t={t} rateMnt={rates.MNT} onApiError={handleApiError}
+            onBack={() => navigate("shop-settings")}
+            onSaved={(product) => showSavedProduct(product, t.addProduct.created)}
+          />
+        )} />
+        <Route path="/product/:id/edit" element={artisanPage(t.addProduct.editTitle, !shopLive ? cantPublish :
+          <ProductRoute t={t} products={products} viewerId={currentUser?.id} onApiError={handleApiError}>
+            {(selected) => (selected.artisan?.user?._id !== currentUser?.id ? <NotAllowed t={t} /> : (
+              <AddProductForm
+                key={selected.id} t={t} product={selected} rateMnt={rates.MNT} onApiError={handleApiError}
+                onBack={() => goBack(productPath(selected.id))}
+                onSaved={(product) => showSavedProduct(product, t.addProduct.updated)}
+              />
+            ))}
+          </ProductRoute>
+        )} />
+        <Route path={PAGE_PATHS["admin-shops"]} element={forRoles(["admin"], t.adminShops.title,
+          <AdminShops key={pageKey} t={t} lang={lang} onApiError={handleApiError} showToast={showToast} />
+        )} />
+
+        <Route path="*" element={<NotFound t={t} />} />
+      </Route>
+    </Routes>
+  );
+}
+
+// The address is the app's navigation state, so everything sits inside the router.
+// React Router's startTransition flag stays off: logging out changes the user and the address
+// together, and a transition would show the old page without a user in between.
+export default function App() {
+  return (
+    <BrowserRouter future={{ v7_relativeSplatPath: true }}>
+      <ScrollToTop />
+      <ArtisanApp />
+    </BrowserRouter>
   );
 }
